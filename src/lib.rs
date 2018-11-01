@@ -1,4 +1,5 @@
 mod dfa;
+mod dot;
 mod nfa;
 mod regex;
 

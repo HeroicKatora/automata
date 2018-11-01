@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::io::{self, Write};
 use std::hash::Hash;
 
+use super::dot::{Family, Node as WriteNode, GraphWriter};
 use super::regex::Regex;
 
 /// A node handle.
@@ -42,6 +44,18 @@ impl<A: Eq + Hash> Dfa<A> {
 
     pub fn to_regex(self) -> Regex {
         unimplemented!()
+    }
+
+    pub fn write_to(&self, output: &mut Write) -> io::Result<()> {
+        let mut writer = GraphWriter::new(output, Family::Directed, None);
+
+        for (from, edges) in self.edges.iter().enumerate() {
+            for (label, to) in edges.iter() {
+                writer.segment([from, to.0].iter().cloned(), None)?;
+            }
+        }
+
+        Ok(())
     }
 }
 
