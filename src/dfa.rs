@@ -1,4 +1,6 @@
-use std::collections::Set;
+use std::collections::HashSet;
+use std::fmt::Debug;
+use std::hash::Hash;
 
 use super::regex::Regex;
 
@@ -8,30 +10,30 @@ pub struct Node(pub usize);
 
 struct Dfa<Alphabet: Eq + Hash> {
     edges: Vec<Vec<(Alphabet, Node)>>,
-    final: Vec<Node>,
+    finals: Vec<Node>,
 }
 
 impl<A: Eq + Hash> Dfa<A> {
-    pub fn from_edges<I, V>(edges: I, final: V) -> Dfa 
+    pub fn from_edges<I, V>(edge_iter: I, finals: V) -> Dfa<A>
     where 
-        I: IntoIterator<Item=(usize, Alphabet, usize)>,
+        I: IntoIterator<Item=(usize, A, usize)>,
         V: Into<Vec<usize>>, 
         A: Clone + Debug,
     {
         let mut edges = Vec::new();
         let mut check = Vec::new();
 
-        for (from, a, to) in edges.into() {
+        for (from, a, to) in edge_iter.into_iter() {
             edges.resize(from + 1, Vec::new());
-            check.resize(from + 1, Set::new());
+            check.resize(from + 1, HashSet::new());
             
-            check.insert(a.clone());
-            edges.push((a, to));
+            edges[from].push((a.clone(), to));
+            check[from].insert(a);
         }
 
-        if let Some(check) = check.pop() {
-            if let Some(err) = check.iter().find(|s| s != &check) {
-                panic!("Different outgoing edges alphabet: {:?} vs {:?}", &check, &err);
+        if let Some(sample) = check.pop() {
+            if let Some(err) = check.iter().find(|&s| s != &sample) {
+                panic!("Different outgoing edges alphabet: {:?} vs {:?}", &sample, &err);
             }
         }
 

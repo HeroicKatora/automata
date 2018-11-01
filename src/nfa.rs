@@ -1,3 +1,5 @@
+use super::regex::Regex;
+
 pub struct NfaEps;
 
 pub struct NfaRegex;

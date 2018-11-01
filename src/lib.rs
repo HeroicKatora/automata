@@ -1,5 +1,9 @@
 mod dfa;
 mod nfa;
+mod regex;
+
+use std::fmt::Debug;
+use std::hash::Hash;
 
 trait Alphabet: Hash + Eq + Debug + Clone + Copy { }
 

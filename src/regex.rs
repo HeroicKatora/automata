@@ -1,4 +1,6 @@
-struct Regex;
+use super::nfa::NfaEps;
+
+pub struct Regex;
 
 impl Regex {
     /// Idea:
