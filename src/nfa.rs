@@ -1,7 +1,9 @@
 use std::collections::HashSet;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
+use std::io::{self, Write};
 
-use super::Alphabet;
+use super::{Alphabet, Ensure};
+use super::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
 use super::regex::Regex;
 
 /// A node handle of an epsilon nfa.
@@ -41,7 +43,38 @@ impl<A: Alphabet> Nfa<A> {
         V: IntoIterator<Item=usize>, 
         A: Clone + Debug,
     {
-        unimplemented!()
+        let mut edges = vec![Vec::new()];
+        let mut epsilons = vec![Vec::new()];
+
+        edge_iter.into_iter().for_each(|edge| match edge {
+            (from, Some(label), to) => {
+                edges.ensure_default(from + 1);
+                edges.ensure_default(to + 1);
+                epsilons.ensure_default(from + 1);
+                epsilons.ensure_default(to + 1);
+
+                edges[from].push((label, Node(to)));
+            },
+            (from, None, to) => {
+                edges.ensure_default(from + 1);
+                edges.ensure_default(to + 1);
+                epsilons.ensure_default(from + 1);
+                epsilons.ensure_default(to + 1);
+
+                epsilons[from].push(Node(to));
+            }
+        });
+
+        let finals = finals
+            .into_iter()
+            .map(Node)
+            .collect();
+
+        Nfa {
+            edges,
+            epsilons,
+            finals,
+        }
     }
 
     /// First collapse all output states (compress the automaton).
@@ -84,6 +117,45 @@ impl<A: Alphabet> Nfa<A> {
     /// growth factor is smaller).
     pub fn to_regex(self) -> Regex<A> {
         unimplemented!()
+    }
+
+    /// Write the nfa into the dot format.
+    pub fn write_to(&self, output: &mut Write) -> io::Result<()> 
+        where for<'a> &'a A: Display
+    {
+        let mut writer = GraphWriter::new(output, Family::Directed, None)?;
+
+        for (from, edges) in self.edges.iter().enumerate() {
+            for (label, to) in edges.iter() {
+                let edge = DotEdge { 
+                    label: Some(format!("{}", label).into()),
+                    .. DotEdge::none()
+                };
+
+                writer.segment([from, to.0].iter().cloned(), Some(edge))?;
+            }
+        }
+
+        for (from, edges) in self.epsilons.iter().enumerate() {
+            for to in edges.iter() {
+                let edge = DotEdge {
+                    label: Some("ε".into()),
+                    .. DotEdge::none()
+                };
+
+                writer.segment([from, to.0].iter().cloned(), Some(edge))?;
+            }
+        }
+
+        for Node(fin) in self.finals.iter().cloned() {
+            let node = DotNode {
+                peripheries: Some(2),
+                .. DotNode::none()
+            };
+            writer.node(fin.into(), Some(node))?;
+        }
+
+        writer.end_into_inner().1
     }
 
     /// All the state reachable purely by epsilon transitions.

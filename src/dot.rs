@@ -392,5 +392,6 @@ mod tests {
         assert_eq!(format!("{}", Id::from("123")), "123");
         assert_eq!(format!("{}", Id::from("a string with spaces")), r#""a string with spaces""#);
         assert_eq!(format!("{}", Id::from("\"")), r#""\"""#);
+        assert_eq!(format!("{}", Id::from("")), r#""""#);
     }
 }

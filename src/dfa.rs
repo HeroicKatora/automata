@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fmt::{Display, Debug};
 use std::io::{self, Write};
 
-pub use super::Alphabet;
+use super::{Alphabet, Ensure};
 use super::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
 use super::regex::Regex;
 
@@ -33,8 +33,10 @@ impl<A: Alphabet> Dfa<A> {
         states.insert(0);
 
         for (from, a, to) in edge_iter.into_iter() {
-            edges.resize(from + 1, Vec::new());
-            check.resize(from + 1, HashSet::new());
+            edges.ensure_default(from + 1);
+            edges.ensure_default(to + 1);
+            check.ensure_default(from + 1);
+            check.ensure_default(to + 1);
             
             edges[from].push((a.clone(), Node(to)));
             check[from].insert(a);
