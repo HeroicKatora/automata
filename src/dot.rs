@@ -221,6 +221,10 @@ impl IdEnum {
         let raw_identifier = |c: char| c.is_ascii_alphabetic() || c.is_ascii_digit() || c == '_';
         let raw_identifier_begin = |c: &char| c.is_ascii_alphabetic() || *c == '_';
 
+        if name.as_ref().is_empty() {
+            return IdEnum::Str(name)
+        }
+
         if name.as_ref().chars().all(|c| c.is_ascii_digit()) {
             return IdEnum::Raw(name)
         }
