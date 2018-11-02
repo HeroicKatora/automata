@@ -1,8 +1,10 @@
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet, HashMap};
 use std::fmt::{Debug, Display};
+use std::hash::Hash;
 use std::io::{self, Write};
 
 use super::{Alphabet, Ensure};
+use super::dfa::Dfa;
 use super::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
 use super::regex::Regex;
 
@@ -24,10 +26,14 @@ pub struct Nfa<A: Alphabet> {
     /// This makes it easier to find the epsilon reachability graph.
     epsilons: Vec<Vec<Node>>,
 
-    finals: Vec<Node>,
+    finals: HashSet<Node>,
 }
 
 pub struct NfaRegex<A: Alphabet>(A);
+
+trait InsertNew<T> {
+    fn insert_new(&mut self, item: T) -> bool;
+}
 
 /// A non-deterministic finite epsilon automaton.
 impl<A: Alphabet> Nfa<A> {
@@ -119,6 +125,58 @@ impl<A: Alphabet> Nfa<A> {
         unimplemented!()
     }
 
+    /// Convert to a dfa using the powerset construction.
+    ///
+    /// Since the alphabet can not be deduced purely from transitions, `alphabet_extension`
+    /// provides a way to indicate additional symbols.
+    pub fn to_dfa<I: IntoIterator<Item=A>>(self, alphabet_extension: I) -> Dfa<A> {
+        // The epsilon transition closure of reachable nodes.
+        let initial_state: BTreeSet<_> = self.epsilon_reach(Node(0));
+        let alphabet = self.edges.iter()
+            .flat_map(|edges| edges.iter().map(|edge| edge.0))
+            .chain(alphabet_extension.into_iter())
+            .collect::<HashSet<A>>()
+            .into_iter()
+            .collect::<Vec<A>>();
+
+        let mut state_map = vec![(initial_state.clone(), 0)].into_iter().collect::<HashMap<_, _>>();
+        let mut pending = vec![initial_state];
+        let mut edges = Vec::new();
+        let mut finals = Vec::new();
+
+        while let Some(next) = pending.pop() {
+            let from = state_map.get(&next).unwrap().clone();
+            for ch in alphabet.iter().cloned() {
+                let basic = next.iter().cloned()
+                    .flat_map(|Node(idx)| self.edges[idx].iter()
+                        .filter(|edge| edge.0 == ch)
+                        .map(|edge| edge.1))
+                    .collect::<HashSet<_>>();
+                let closure = basic.into_iter()
+                    .map(|state| self.epsilon_reach(state))
+                    .fold(BTreeSet::new(), |left, right| left.union(&right).cloned().collect());
+                let is_final = closure.iter().any(|st| self.finals.contains(st));
+                let new_index = state_map.len();
+
+                let nr = if let Some(to) = state_map.get(&closure).cloned() {
+                    to
+                } else {
+                    state_map.insert(closure.clone(), new_index);
+                    pending.push(closure);
+                    new_index
+                };
+
+                if is_final {
+                    finals.push(nr)
+                }
+
+                edges.push((from, ch, nr));
+            }
+        }
+
+        Dfa::from_edges(edges, finals)
+    }
+
     /// Write the nfa into the dot format.
     pub fn write_to(&self, output: &mut Write) -> io::Result<()> 
         where for<'a> &'a A: Display
@@ -170,7 +228,7 @@ impl<A: Alphabet> Nfa<A> {
         let mut sequence = sequence.into_iter();
 
         // The epsilon transition closure of reachable nodes.
-        let mut states = self.epsilon_reach(Node(0));
+        let mut states: HashSet<_> = self.epsilon_reach(Node(0));
 
         while let Some(ch) = sequence.next() {
             let next = states.into_iter()
@@ -184,21 +242,22 @@ impl<A: Alphabet> Nfa<A> {
             states = epsilon_reach;
         }
 
-        let finals = self.finals.iter().cloned().collect();
-        !states.is_disjoint(&finals)
+        !states.is_disjoint(&self.finals)
     }
 
     /// All the state reachable purely by epsilon transitions.
-    fn epsilon_reach(&self, start: Node) -> HashSet<Node> {
-        let mut reached = HashSet::new();
+    fn epsilon_reach<R>(&self, start: Node) -> R 
+        where R: Default + InsertNew<Node>
+    {
+        let mut reached = R::default();
         let mut todo = Vec::new();
 
-        reached.insert(start);
+        reached.insert_new(start);
         todo.push(start);
 
         while let Some(next) = todo.pop() {
             self.epsilons[next.0].iter()
-                .filter(|&&target| reached.insert(target))
+                .filter(|&&target| reached.insert_new(target))
                 .for_each(|&target| todo.push(target));
         }
 
@@ -229,6 +288,18 @@ impl<A: Alphabet> NfaRegex<A> {
 impl<A: Alphabet> From<Nfa<A>> for NfaRegex<A> {
     fn from(automaton: Nfa<A>) -> Self {
         unimplemented!()
+    }
+}
+
+impl<T> InsertNew<T> for BTreeSet<T> where T: Eq + Ord {
+    fn insert_new(&mut self, item: T) -> bool {
+        self.insert(item)
+    }
+}
+
+impl<T> InsertNew<T> for HashSet<T> where T: Eq + Hash {
+    fn insert_new(&mut self, item: T) -> bool {
+        self.insert(item)
     }
 }
 
