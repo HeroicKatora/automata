@@ -10,7 +10,7 @@ use super::regex::Regex;
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Node(pub usize);
 
-struct Dfa<Alphabet: Eq + Hash> {
+pub struct Dfa<Alphabet: Eq + Hash> {
     edges: Vec<Vec<(Alphabet, Node)>>,
     finals: Vec<Node>,
 }
@@ -47,7 +47,7 @@ impl<A: Eq + Hash> Dfa<A> {
     }
 
     pub fn write_to(&self, output: &mut Write) -> io::Result<()> {
-        let mut writer = GraphWriter::new(output, Family::Directed, None);
+        let mut writer = GraphWriter::new(output, Family::Directed, None)?;
 
         for (from, edges) in self.edges.iter().enumerate() {
             for (label, to) in edges.iter() {
@@ -55,7 +55,7 @@ impl<A: Eq + Hash> Dfa<A> {
             }
         }
 
-        Ok(())
+        writer.end_into_inner().1
     }
 }
 
