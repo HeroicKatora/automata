@@ -1,5 +1,5 @@
 [package]
-name = "algorithms_on_automata"
+name = "automata"
 version = "0.1.0"
 authors = ["HeroicKatora <andreas.molzer@gmx.de>"]
 

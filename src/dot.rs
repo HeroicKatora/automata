@@ -8,13 +8,18 @@ use std::fmt;
 use std::io::{self, Write};
 
 /// Optionally contains the possible node attributes.
+#[derive(Clone, Default)]
 pub struct Node {
     /// A label to appear, can be html or an escaped string.
-    label: Option<Id>,
+    pub label: Option<Id>,
 }
 
 /// Optionally contains the possible edge attributes.
-pub struct Edge;
+#[derive(Clone, Default)]
+pub struct Edge {
+    /// A label to appear, can be html or an escaped string.
+    pub label: Option<Id>,
+}
 
 /// Writes dot files.
 ///
@@ -32,18 +37,15 @@ pub enum Family {
     Undirected,
 }
 
-pub enum NameError {
-    /// Only C-style identifiers are valid.
-    InvalidIdentifier,
-}
-
 /// An identifier, has several uses in the language (`ID`).
 ///
 /// IDs representing attributes have a constant defined in this struct.
 ///
 /// TODO: `node_id` is currently restricted to this, but could have port and another specifier.
+#[derive(Clone, Debug)]
 pub struct Id(IdEnum);
 
+#[derive(Clone, Debug)]
 enum IdEnum {
     /// A c-style identifier or a string numeral.
     ///
@@ -85,13 +87,13 @@ impl<W: Write> GraphWriter<W> {
     /// Set the default node information.
     pub fn default_node(&mut self, default_node: Node) -> io::Result<()> {
         let fmt = self.inner.as_mut().unwrap();
-        write!(fmt, "node [{}];", default_node)
+        write!(fmt, "\tnode [{}];", default_node)
     }
 
     /// Set the default edge attributes.
     pub fn default_edge(&mut self, default_edge: Edge) -> io::Result<()> {
         let fmt = self.inner.as_mut().unwrap();
-        write!(fmt, "edge [{}];", default_edge)
+        write!(fmt, "\tedge [{}];", default_edge)
     }
 
     /// Add a line segment, that is two or more connected nodes.
@@ -109,7 +111,7 @@ impl<W: Write> GraphWriter<W> {
         let begin = iter.next().unwrap();
         let end = iter.next().unwrap();
 
-        write!(fmt, "{} {} {} ", begin.into(), self.edgeop.edgeop(), end.into())?;
+        write!(fmt, "\t{} {} {} ", begin.into(), self.edgeop.edgeop(), end.into())?;
 
         while let Some(next) = iter.next() {
             write!(fmt, "{} {} ", self.edgeop.edgeop(), next.into())?;
@@ -126,7 +128,7 @@ impl<W: Write> GraphWriter<W> {
     pub fn node(&mut self, id: Id, node: Option<Node>) -> io::Result<()> {
         let fmt = self.inner.as_mut().unwrap();
 
-        write!(fmt, "{} ", id);
+        write!(fmt, "\t{} ", id);
 
         if let Some(options) = node {
             write!(fmt, "[{}];\n", options)
@@ -174,7 +176,9 @@ impl Edge {
     ///
     /// May be used in constructors to default assign remaining members with `.. Edge::none()`.
     pub fn none() -> Self {
-        Edge
+        Edge {
+            label: None,
+        }
     }
 }
 
@@ -360,7 +364,11 @@ impl fmt::Display for Node {
 
 /// Formats the edge attributes (`a_list` in specification terms).
 impl fmt::Display for Edge {
-    fn fmt(&self, _f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        if let Some(label) = self.label.as_ref() {
+            write!(f, "{}={}", Id::LABEL, label)?;
+        }
+
         Ok(())
     }
 }
