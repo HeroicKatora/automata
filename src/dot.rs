@@ -12,6 +12,12 @@ use std::io::{self, Write};
 pub struct Node {
     /// A label to appear, can be html or an escaped string.
     pub label: Option<Id>,
+
+    /// Number of stacked polygon lines for the outer shape.
+    ///
+    /// Final/Accepting states in automaton are marked by two peripheral lines. The default value
+    /// for this attribute is 1.
+    pub peripheries: Option<usize>,
 }
 
 /// Optionally contains the possible edge attributes.
@@ -165,9 +171,7 @@ impl Node {
     ///
     /// May be used in constructors to default assign remaining members with `.. Node::none()`.
     pub fn none() -> Self {
-        Node {
-            label: None,
-        }
+        Node::default()
     }
 }
 
@@ -176,9 +180,7 @@ impl Edge {
     ///
     /// May be used in constructors to default assign remaining members with `.. Edge::none()`.
     pub fn none() -> Self {
-        Edge {
-            label: None,
-        }
+        Edge::default()
     }
 }
 
@@ -201,6 +203,7 @@ impl Family {
 
 impl Id {
     const LABEL: Id = Id(IdEnum::Raw(Cow::Borrowed("label")));
+    const PERIPHERIES: Id = Id(IdEnum::Raw(Cow::Borrowed("peripheries")));
 }
 
 impl IdEnum {
@@ -355,7 +358,11 @@ impl fmt::Display for Id {
 impl fmt::Display for Node {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         if let Some(label) = self.label.as_ref() {
-            write!(f, "{}={}", Id::LABEL, label)?;
+            write!(f, "{}={},", Id::LABEL, label)?;
+        }
+
+        if let Some(peripheries) = self.peripheries.clone() {
+            write!(f, "{}={},", Id::PERIPHERIES, peripheries)?;
         }
 
         Ok(())
@@ -366,7 +373,7 @@ impl fmt::Display for Node {
 impl fmt::Display for Edge {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         if let Some(label) = self.label.as_ref() {
-            write!(f, "{}={}", Id::LABEL, label)?;
+            write!(f, "{}={},", Id::LABEL, label)?;
         }
 
         Ok(())

@@ -3,7 +3,7 @@ use std::fmt::{Display, Debug};
 use std::io::{self, Write};
 
 pub use super::Alphabet;
-use super::dot::{Family, Edge, GraphWriter};
+use super::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
 use super::regex::Regex;
 
 /// A node handle.
@@ -89,13 +89,21 @@ impl<A: Alphabet> Dfa<A> {
 
         for (from, edges) in self.edges.iter().enumerate() {
             for (label, to) in edges.iter() {
-                let edge = Edge { 
+                let edge = DotEdge { 
                     label: Some(format!("{}", label).into()),
-                    .. Edge::none()
+                    .. DotEdge::none()
                 };
 
                 writer.segment([from, to.0].iter().cloned(), Some(edge))?;
             }
+        }
+
+        for Node(fin) in self.finals.iter().cloned() {
+            let node = DotNode {
+                peripheries: Some(2),
+                .. DotNode::none()
+            };
+            writer.node(fin.into(), Some(node))?;
         }
 
         writer.end_into_inner().1
@@ -123,12 +131,13 @@ mod tests {
         let output = String::from_utf8(output)
             .expect("output should be utf8 encoded");
         assert_eq!(output, r#"digraph {
-	0 -> 0 [label=0];
-	0 -> 1 [label=1];
-	1 -> 2 [label=0];
-	1 -> 0 [label=1];
-	2 -> 1 [label=0];
-	2 -> 2 [label=1];
+	0 -> 0 [label=0,];
+	0 -> 1 [label=1,];
+	1 -> 2 [label=0,];
+	1 -> 0 [label=1,];
+	2 -> 1 [label=0,];
+	2 -> 2 [label=1,];
+	1 [peripheries=2,];
 }
 "#);
     }
