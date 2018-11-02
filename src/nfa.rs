@@ -158,6 +158,36 @@ impl<A: Alphabet> Nfa<A> {
         writer.end_into_inner().1
     }
 
+    /// Checks if the input word is contained in the language.
+    ///
+    /// The check is realized by performing a dynamic powerset construction of the resulting dfa.
+    /// For simplicity, previous states are not stored anywhere, resulting in abysmal expected
+    /// runtime for anything but the smallest cases.
+    ///
+    /// Consider converting the nfa to an equivalent dfa before querying, especially when
+    /// performing multiple successive queries.
+    pub fn contains<I: IntoIterator<Item=A>>(&self, sequence: I) -> bool {
+        let mut sequence = sequence.into_iter();
+
+        // The epsilon transition closure of reachable nodes.
+        let mut states = self.epsilon_reach(Node(0));
+
+        while let Some(ch) = sequence.next() {
+            let next = states.into_iter()
+                .flat_map(|Node(idx)| self.edges[idx].iter()
+                      .filter(|edge| edge.0 == ch)
+                      .map(|edge| edge.1))
+                .collect::<HashSet<_>>();
+            let epsilon_reach = next.iter().cloned()
+                .map(|state| self.epsilon_reach(state))
+                .fold(HashSet::new(), |left, right| left.union(&right).cloned().collect());
+            states = epsilon_reach;
+        }
+
+        let finals = self.finals.iter().cloned().collect();
+        !states.is_disjoint(&finals)
+    }
+
     /// All the state reachable purely by epsilon transitions.
     fn epsilon_reach(&self, start: Node) -> HashSet<Node> {
         let mut reached = HashSet::new();
@@ -228,5 +258,22 @@ mod tests {
 	1 [peripheries=2,];
 }
 "#);
+    }
+
+    #[test]
+    fn contains() {
+        let automaton = Nfa::from_edges(vec![
+            (0, Some('0'), 0),
+            (0, None, 1),
+            (0, Some('1'), 1),
+            (1, Some('0'), 0),
+        ], vec![1]);
+
+        assert!( automaton.contains("".chars()));
+        assert!( automaton.contains("1".chars()));
+        assert!( automaton.contains("1001".chars()));
+        assert!( automaton.contains("0000".chars()));
+        assert!(!automaton.contains("11".chars()));
+        assert!(!automaton.contains("2".chars()));
     }
 }
