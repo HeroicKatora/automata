@@ -5,12 +5,14 @@ use std::fs;
 use std::process;
 
 use automata::dfa::Dfa;
+use automata::nfa::Nfa;
 
 fn main() {
     fs::create_dir_all("./output")
         .expect("Failed to create output directory");
     
     dfa();
+    nfa();
 
     convert();
     view();
@@ -29,6 +31,20 @@ fn dfa() {
     let mut output = Vec::new();
     automaton.write_to(&mut output).unwrap();
     fs::write("./output/dfa.dot", output)
+        .expect("Failed to write dfa dot file");
+}
+
+fn nfa() {
+    let automaton = Nfa::from_edges(vec![
+        (0, Some('0'), 0),
+        (0, None, 1),
+        (0, Some('1'), 1),
+        (1, Some('0'), 0),
+    ], vec![1]);
+
+    let mut output = Vec::new();
+    automaton.write_to(&mut output).unwrap();
+    fs::write("./output/nfa.dot", output)
         .expect("Failed to write dfa dot file");
 }
 
