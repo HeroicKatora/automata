@@ -18,17 +18,20 @@ pub struct Dfa<A: Alphabet> {
 impl<A: Alphabet> Dfa<A> {
     /// Build a dfa from the connecting edges and final states.
     ///
-    /// States are numbered in an arbitrary order. The automaton will deduce the used alphabet
-    /// subset automatically and test whether it has been used consistently.
+    /// States are numbered in an arbitrary order, except the start label 0. The automaton will
+    /// deduce the used alphabet subset automatically and test whether it has been used
+    /// consistently.
+    ///
     pub fn from_edges<I, V>(edge_iter: I, finals: V) -> Dfa<A>
     where 
         I: IntoIterator<Item=(usize, A, usize)>,
         V: IntoIterator<Item=usize>, 
         A: Clone + Debug,
     {
-        let mut edges = Vec::new();
-        let mut check = Vec::new();
+        let mut edges = vec![Vec::new()];
+        let mut check = vec![HashSet::new()];
         let mut states = HashSet::new();
+        states.insert(0);
 
         for (from, a, to) in edge_iter.into_iter() {
             edges.resize(from + 1, Vec::new());
@@ -56,6 +59,23 @@ impl<A: Alphabet> Dfa<A> {
             edges,
             finals,
         }
+    }
+
+    /// Checks if the input word is contained in the language.
+    pub fn contains<I: IntoIterator<Item=A>>(&self, sequence: I) -> bool {
+        let mut sequence = sequence.into_iter();
+        let mut state = 0;
+        while let Some(ch) = sequence.next() {
+            let edges = &self.edges[state];
+            let Node(next) = edges.iter()
+                .find(|e| e.0 == ch)
+                .map(|e| e.1)
+                .expect("Mismatch between DFA alphabet and word alphabet");
+            state = next;
+        }
+        self.finals.iter().cloned()
+            .find(move |Node(s)| *s == state)
+            .is_some()
     }
 
     pub fn to_regex(self) -> Regex {
@@ -111,5 +131,23 @@ mod tests {
 	2 -> 2 [label=1];
 }
 "#);
+    }
+
+    #[test]
+    fn contains() {
+        let automaton = Dfa::from_edges(vec![
+            (0, '0', 0),
+            (0, '1', 1),
+            (1, '0', 2),
+            (1, '1', 0),
+            (2, '0', 1),
+            (2, '1', 2),
+        ], vec![1]);
+        
+        assert!( automaton.contains("1".chars()));
+        assert!( automaton.contains("100".chars()));
+        assert!(!automaton.contains("0".chars()));
+        assert!(!automaton.contains("10".chars()));
+        assert!(!automaton.contains("".chars()));
     }
 }
