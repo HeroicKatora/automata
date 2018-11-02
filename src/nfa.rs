@@ -1,11 +1,49 @@
+use std::collections::HashSet;
+use std::fmt::Debug;
+
+use super::Alphabet;
 use super::regex::Regex;
 
-pub struct NfaEps;
+/// A node handle of an epsilon nfa.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
+pub struct Node(pub usize);
 
-pub struct NfaRegex;
+/// A node handle of a regex nfa.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
+pub struct RegexNode(pub usize);
+
+/// A non-deterministic automaton with epsilon transitions.
+pub struct Nfa<A: Alphabet> {
+    /// Edges like a dfa but may contain duplicate entries for first component.
+    edges: Vec<Vec<(A, Node)>>,
+
+    /// Stores epsilon transitions separately.
+    ///
+    /// This makes it easier to find the epsilon reachability graph.
+    epsilons: Vec<Vec<Node>>,
+
+    finals: Vec<Node>,
+}
+
+pub struct NfaRegex<A: Alphabet>(A);
 
 /// A non-deterministic finite epsilon automaton.
-impl NfaEps {
+impl<A: Alphabet> Nfa<A> {
+    /// Build a epsilon nfa from the connecting edges and final states.
+    ///
+    /// States are numbered in an arbitrary order, except the start label 0. Emulate multiple start
+    /// states by creating epsilon transitions from the 0 state. Technically, the final state could
+    /// also be collapsed into a single state but that is sometimes more tedious to work with
+    /// (especially when transforming a regex in an nfa).
+    pub fn from_edges<I, V>(edge_iter: I, finals: V) -> Nfa<A>
+    where 
+        I: IntoIterator<Item=(usize, Option<A>, usize)>,
+        V: IntoIterator<Item=usize>, 
+        A: Clone + Debug,
+    {
+        unimplemented!()
+    }
+
     /// First collapse all output states (compress the automaton).
     ///     This is done by adding new initial/final state and
     ///     epsilon transition to/from the previous states.
@@ -44,13 +82,30 @@ impl NfaEps {
     ///
     /// => O(|V|³) length, preprocessing not even included (although its
     /// growth factor is smaller).
-    pub fn to_regex(self) -> Regex {
+    pub fn to_regex(self) -> Regex<A> {
         unimplemented!()
+    }
+
+    /// All the state reachable purely by epsilon transitions.
+    fn epsilon_reach(&self, start: Node) -> HashSet<Node> {
+        let mut reached = HashSet::new();
+        let mut todo = Vec::new();
+
+        reached.insert(start);
+        todo.push(start);
+
+        while let Some(next) = todo.pop() {
+            self.epsilons[next.0].iter()
+                .filter(|&&target| reached.insert(target))
+                .map(|&target| todo.push(target));
+        }
+
+        reached
     }
 }
 
 /// A non-deterministic finite automaton with regex transition guards.
-impl NfaRegex {
+impl<A: Alphabet> NfaRegex<A> {
     /// General idea, local to edges:
     /// ```text
     ///                          a
@@ -64,13 +119,13 @@ impl NfaRegex {
     /// 0 ––a+b–> 1   >  0 |    1
     ///                    \–b–/
     /// ```
-    pub fn to_fnaeps(self) -> NfaEps {
+    pub fn to_nfa(self) -> Nfa<A> {
         unimplemented!()
     }
 }
 
-impl From<NfaEps> for NfaRegex {
-    fn from(automaton: NfaEps) -> Self {
+impl<A: Alphabet> From<Nfa<A>> for NfaRegex<A> {
+    fn from(automaton: Nfa<A>) -> Self {
         unimplemented!()
     }
 }

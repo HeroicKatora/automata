@@ -21,7 +21,6 @@ impl<A: Alphabet> Dfa<A> {
     /// States are numbered in an arbitrary order, except the start label 0. The automaton will
     /// deduce the used alphabet subset automatically and test whether it has been used
     /// consistently.
-    ///
     pub fn from_edges<I, V>(edge_iter: I, finals: V) -> Dfa<A>
     where 
         I: IntoIterator<Item=(usize, A, usize)>,
@@ -78,7 +77,7 @@ impl<A: Alphabet> Dfa<A> {
             .is_some()
     }
 
-    pub fn to_regex(self) -> Regex {
+    pub fn to_regex(self) -> Regex<A> {
         unimplemented!()
     }
 

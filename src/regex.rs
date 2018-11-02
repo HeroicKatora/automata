@@ -1,12 +1,14 @@
-use super::nfa::NfaEps;
+use super::Alphabet;
+use super::nfa::Nfa;
 
-pub struct Regex;
+/// Represents regular expressions over some finite alphabet.
+pub struct Regex<A: Alphabet>(A);
 
-impl Regex {
+impl<A: Alphabet> Regex<A> {
     /// Idea:
     ///
     /// Is like a regex-labeled nfa with only one final state.
-    pub fn to_nfaeps(self) -> NfaEps {
+    pub fn to_nfa(self) -> Nfa<A> {
         unimplemented!()
     }
 }
