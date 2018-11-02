@@ -169,7 +169,7 @@ impl<A: Alphabet> Nfa<A> {
         while let Some(next) = todo.pop() {
             self.epsilons[next.0].iter()
                 .filter(|&&target| reached.insert(target))
-                .map(|&target| todo.push(target));
+                .for_each(|&target| todo.push(target));
         }
 
         reached
@@ -199,5 +199,34 @@ impl<A: Alphabet> NfaRegex<A> {
 impl<A: Alphabet> From<Nfa<A>> for NfaRegex<A> {
     fn from(automaton: Nfa<A>) -> Self {
         unimplemented!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_and_format() {
+        let automaton = Nfa::from_edges(vec![
+            (0, Some('0'), 0),
+            (0, None, 1),
+            (0, Some('1'), 1),
+            (1, Some('0'), 0),
+        ], vec![1]);
+
+        let mut output = Vec::new();
+        automaton.write_to(&mut output)
+            .expect("failed to format to dot file");
+        let output = String::from_utf8(output)
+            .expect("output should be utf8 encoded");
+        assert_eq!(output, r#"digraph {
+	0 -> 0 [label=0,];
+	0 -> 1 [label=1,];
+	1 -> 0 [label=0,];
+	0 -> 1 [label="ε",];
+	1 [peripheries=2,];
+}
+"#);
     }
 }
