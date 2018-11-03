@@ -347,4 +347,23 @@ mod tests {
         assert!(!automaton.contains("11".chars()));
         assert!(!automaton.contains("2".chars()));
     }
+
+    #[test]
+    fn convert_to_dfa() {
+        let automaton = Nfa::from_edges(vec![
+            (0, Some('0'), 0),
+            (0, None, 1),
+            (0, Some('1'), 1),
+            (1, Some('0'), 0),
+        ], vec![1]);
+
+        let automaton = automaton.to_dfa(vec!['2']);
+
+        assert!( automaton.contains("".chars()));
+        assert!( automaton.contains("1".chars()));
+        assert!( automaton.contains("1001".chars()));
+        assert!( automaton.contains("0000".chars()));
+        assert!(!automaton.contains("11".chars()));
+        assert!(!automaton.contains("2".chars()));
+    }
 }
