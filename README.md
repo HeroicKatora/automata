@@ -33,8 +33,9 @@ word rejection, and the exporter.
 There are more features planned and/or in development
 
 * Regex
-* Converters–all currently planned automata classes are equivalent
+* Converters–all of (`dfa`, `nfa`, `regex`) are equivalent
+* Joins, Compositions, Intersects, Differences, Equivalence checks
 * Minimalization
-* Joins, Intersects, Differences, Equivalence checks
 * Modeling solutions to linear integer (in-)equalities with finite automata
+* Finite-state Transducers–and compositions
 
