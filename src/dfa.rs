@@ -249,4 +249,38 @@ mod tests {
         assert!(!automaton.contains("10".chars()));
         assert!(!automaton.contains("".chars()));
     }
+
+    #[test]
+    fn pairing() {
+        // Accepts even length words
+        let automaton_2 = Dfa::from_edges(vec![
+            (0, '.', 1),
+            (1, '.', 0),
+        ], vec![0]);
+
+        // Accepts words with `len(w) % 3 == 0`
+        let automaton_3 = Dfa::from_edges(vec![
+            (0, '.', 1),
+            (1, '.', 2),
+            (2, '.', 0),
+        ], vec![0]);
+
+        let accept_6_0 = automaton_2.pair(&automaton_3, &|lhs, rhs| lhs & rhs).unwrap();
+        assert!( accept_6_0.contains("".chars()));
+        assert!(!accept_6_0.contains(".".chars()));
+        assert!(!accept_6_0.contains("..".chars()));
+        assert!(!accept_6_0.contains("...".chars()));
+        assert!(!accept_6_0.contains("....".chars()));
+        assert!(!accept_6_0.contains(".....".chars()));
+        assert!( accept_6_0.contains("......".chars()));
+
+        let accept_6_1 = automaton_2.pair(&automaton_3, &|lhs, rhs| lhs | rhs).unwrap();
+        assert!( accept_6_1.contains("".chars()));
+        assert!(!accept_6_1.contains(".".chars()));
+        assert!( accept_6_1.contains("..".chars()));
+        assert!( accept_6_1.contains("...".chars()));
+        assert!( accept_6_1.contains("....".chars()));
+        assert!(!accept_6_1.contains(".....".chars()));
+        assert!( accept_6_1.contains("......".chars()));
+    }
 }
