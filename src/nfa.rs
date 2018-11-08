@@ -286,7 +286,7 @@ impl<A: Alphabet> NfaRegex<A> {
 }
 
 impl<A: Alphabet> From<Nfa<A>> for NfaRegex<A> {
-    fn from(automaton: Nfa<A>) -> Self {
+    fn from(_automaton: Nfa<A>) -> Self {
         unimplemented!()
     }
 }

@@ -161,7 +161,7 @@ impl<W: io::Write> Drop for GraphWriter<W> {
 }
 
 impl<'a, W: Write> GraphWriter<&'a mut W> {
-    pub fn subgraph(&mut self, name: Option<String>) -> GraphWriter<&mut W> {
+    pub fn subgraph(&mut self, _name: Option<String>) -> GraphWriter<&mut W> {
         unimplemented!()
     }
 }

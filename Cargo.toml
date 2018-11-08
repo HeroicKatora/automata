@@ -1,6 +1,17 @@
 [package]
 name = "automata"
-version = "0.1.0"
-authors = ["HeroicKatora <andreas.molzer@gmx.de>"]
+version = "0.0.3"
+authors = ["HeroicKatora <andreas.molzer@tum.de>"]
+
+# All the human facing meta information
+description = "An implementation of standard finite state automata such as DFA, NFA, Regex"
+repository = "https://github.com/HeroicKatora/automata"
+readme = "Readme.md"
+keywords = ["dfa", "nfa", "regex", "finite"]
+categories = ["parsing", "data-structures", "algorithms"]
+license = "MIT"
+
+[badges]
+maintenance = { state = "actively-developed" }
 
 [dependencies]
