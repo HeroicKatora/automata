@@ -109,6 +109,26 @@ impl<A: Alphabet> Dfa<A> {
 
         writer.end_into_inner().1
     }
+
+    /// Minimize the automata into its language partition.
+    ///
+    /// Contrary to NFAs, the resulting automaton is guaranteed to be a minimal
+    /// automaton exactly equivalent to the languages minimal DFA.
+    pub fn minimized(&self) -> Self {
+        unimplemented!()
+    }
+
+    /// Pairs two automata with a given binary boolean operation
+    pub fn pair(&self, rhs: &Self, decider: &Fn(bool, bool) -> bool) -> Self {
+        unimplemented!()
+    }
+
+    /// Like `pair` but only determines if the result would be an empty automaton.
+    ///
+    /// This speeds up operations such as equivalence checks.
+    pub fn pair_empty(&self, rhs: &Self, decider: &Fn(bool, bool) -> bool) -> bool {
+        unimplemented!()
+    }
 }
 
 #[cfg(test)]
