@@ -18,6 +18,13 @@ family and try to immediately show the images. This is handled by invoking
 `dot`–for conversion to `png`– and `feh`–for rendering the images–so make sure
 those are installed for the best effect.
 
+## NOTICE: Ownership transfer
+
+This crate has recently changed ownership from
+[gsingh93](https://github.com/gsingh93/rust-automata) and are now maintained
+following a university course. Supplementary material on theoretical questions
+might appear as part of the documentation.
+
 ## Tests
 
 ```
