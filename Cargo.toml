@@ -12,6 +12,6 @@ categories = ["parsing", "data-structures", "algorithms"]
 license = "MIT"
 
 [badges]
-maintenance = { state = "actively-developed" }
+maintenance = { status = "actively-developed" }
 
 [dependencies]
