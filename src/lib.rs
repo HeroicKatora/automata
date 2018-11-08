@@ -6,9 +6,13 @@ pub mod regex;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-pub trait Alphabet: Hash + Eq + Debug + Clone + Copy { }
+/// A generic alphabet.
+///
+/// `Eq`, `Ord`, and `Hash` are assumed to be provided for the finite set to
+/// simplify data structures by allowing use of different map and set types.
+pub trait Alphabet: Hash + Eq + Debug + Clone + Copy + Ord { }
 
-impl<T> Alphabet for T where T: Hash + Eq + Debug + Clone + Copy { }
+impl<T> Alphabet for T where T: Hash + Eq + Debug + Clone + Copy + Ord { }
 
 /// Ensure the length of a container as if by resize(max(len, n)).
 trait Ensure<T: Clone> {

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Debug};
 use std::io::{self, Write};
 
@@ -7,12 +7,18 @@ use super::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
 use super::regex::Regex;
 
 /// A node handle.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub struct Node(pub usize);
 
 pub struct Dfa<A: Alphabet> {
+    /// Edges of the graph, each list sorted against the alphabet.
     edges: Vec<Vec<(A, Node)>>,
-    finals: Vec<Node>,
+
+    /// Final or accepting states.
+    finals: HashSet<Node>,
+
+    /// A sorted list of the alphabet, to allow quick comparison.
+    alphabet: Vec<A>,
 }
 
 impl<A: Alphabet> Dfa<A> {
@@ -56,9 +62,19 @@ impl<A: Alphabet> Dfa<A> {
             }
         }
 
+        let mut alphabet: Vec<_> = alphabet.unwrap().into_iter().collect();
+        alphabet.sort_unstable();
+
+        for edge_list in edges.iter_mut() {
+            // There are never any duplicates and now the indices correspond to
+            // the indices in the alphabet list.
+            edge_list.sort_unstable();
+        }
+
         Dfa {
             edges,
             finals,
+            alphabet,
         }
     }
 
@@ -66,6 +82,7 @@ impl<A: Alphabet> Dfa<A> {
     pub fn contains<I: IntoIterator<Item=A>>(&self, sequence: I) -> bool {
         let mut sequence = sequence.into_iter();
         let mut state = 0;
+
         while let Some(ch) = sequence.next() {
             let edges = &self.edges[state];
             let Node(next) = edges.iter()
@@ -74,9 +91,8 @@ impl<A: Alphabet> Dfa<A> {
                 .expect("Mismatch between DFA alphabet and word alphabet");
             state = next;
         }
-        self.finals.iter().cloned()
-            .find(move |Node(s)| *s == state)
-            .is_some()
+
+        self.finals.contains(&Node(state))
     }
 
     pub fn to_regex(self) -> Regex<A> {
@@ -110,6 +126,11 @@ impl<A: Alphabet> Dfa<A> {
         writer.end_into_inner().1
     }
 
+    /// The alphabet is the set of symbols in words of that language.
+    pub fn alphabet(&self) -> &[A] {
+        self.alphabet.as_slice()
+    }
+
     /// Minimize the automata into its language partition.
     ///
     /// Contrary to NFAs, the resulting automaton is guaranteed to be a minimal
@@ -119,14 +140,62 @@ impl<A: Alphabet> Dfa<A> {
     }
 
     /// Pairs two automata with a given binary boolean operation
-    pub fn pair(&self, rhs: &Self, decider: &Fn(bool, bool) -> bool) -> Self {
-        unimplemented!()
+    ///
+    /// If there are no final states, returns `None`.
+    pub fn pair(&self, rhs: &Self, decider: &Fn(bool, bool) -> bool) -> Option<Self> {
+        assert!(self.alphabet() == rhs.alphabet(), "Automata alphabets differ");
+
+        let mut assigned = HashMap::new();
+        let mut working = vec![(0, 0, 0)];
+        let mut edges: Vec<Vec<(A, Node)>> = Vec::new();
+        let mut finals = HashSet::new();
+        assigned.insert((0, 0), 0);
+
+        while let Some((left, right, self_id)) = working.pop() {
+            let decide = decider(
+                self.finals.contains(&Node(left)),
+                rhs.finals.contains(&Node(right)));
+
+            if decide {
+                finals.insert(Node(self_id));
+            }
+
+            edges.ensure_default(self_id + 1);
+            let edges = &mut edges[self_id];
+
+            for (pos, symbol) in self.alphabet().iter().enumerate() {
+                // Gets updated when we encounter an existing node.
+                let mut node_id = assigned.len();
+
+                let new_left = self.edges[left][pos].1;
+                let new_right = rhs.edges[right][pos].1;
+
+                assigned.entry((new_left.0, new_right.0))
+                    .and_modify(|&mut id| node_id = id)
+                    .or_insert_with(|| {
+                        working.push((new_left.0, new_right.0, node_id));
+                        node_id
+                    });
+
+                edges.push((symbol.clone(), Node(node_id)));
+            }
+        }
+
+        if finals.is_empty() {
+            None
+        } else {
+            Some(Dfa {
+                edges,
+                finals,
+                alphabet: self.alphabet.clone(),
+            })
+        }
     }
 
     /// Like `pair` but only determines if the result would be an empty automaton.
     ///
     /// This speeds up operations such as equivalence checks.
-    pub fn pair_empty(&self, rhs: &Self, decider: &Fn(bool, bool) -> bool) -> bool {
+    pub fn pair_empty(&self, _rhs: &Self, _decider: &Fn(bool, bool) -> bool) -> bool {
         unimplemented!()
     }
 }
