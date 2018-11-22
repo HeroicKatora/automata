@@ -10,6 +10,10 @@ use std::hash::Hash;
 ///
 /// `Eq`, `Ord`, and `Hash` are assumed to be provided for the finite set to
 /// simplify data structures by allowing use of different map and set types.
+///
+/// An interesting case may be using `Option<A> where A: Alphabet` which
+/// provides the possibility to consider an 'anything else' case and an actually
+/// infinte alphabet of which the automaton just uses a finite set.
 pub trait Alphabet: Hash + Eq + Debug + Clone + Copy + Ord { }
 
 impl<T> Alphabet for T where T: Hash + Eq + Debug + Clone + Copy + Ord { }
