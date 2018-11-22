@@ -194,9 +194,42 @@ impl<A: Alphabet> Dfa<A> {
 
     /// Like `pair` but only determines if the result would be an empty automaton.
     ///
-    /// This speeds up operations such as equivalence checks.
-    pub fn pair_empty(&self, _rhs: &Self, _decider: &Fn(bool, bool) -> bool) -> bool {
-        unimplemented!()
+    /// This speeds up operations such as equivalence checks. Equivalent to
+    /// `empty` but terminates immediately whenever a state would be inserted
+    /// into the set of final states. This is because the state would be reachable 
+    /// by construction. Therefore we also need not record edges and state ids.
+    ///
+    /// Note that you can also use this as a universality test by inverting the
+    /// decider function. A DFA is universal iff all of its reachable states are 
+    /// final, which is the same as checking that in the complement all reachable
+    /// states are non-final.
+    pub fn pair_empty(&self, rhs: &Self, decider: &Fn(bool, bool) -> bool) -> bool {
+        assert!(self.alphabet() == rhs.alphabet(), "Automata alphabets differ");
+
+        let mut assigned = HashSet::new();
+        let mut working = vec![(0, 0)];
+        assigned.insert((0, 0));
+
+        while let Some((left, right)) = working.pop() {
+            let decide = decider(
+                self.finals.contains(&Node(left)),
+                rhs.finals.contains(&Node(right)));
+
+            if decide {
+                return false;
+            }
+
+            for (pos, _) in self.alphabet().iter().enumerate() {
+                let new_left = self.edges[left][pos].1;
+                let new_right = rhs.edges[right][pos].1;
+
+                if assigned.insert((new_left.0, new_right.0)) {
+                    working.push((new_left.0, new_right.0))
+                }
+            }
+        }
+
+        true
     }
 }
 
@@ -282,5 +315,33 @@ mod tests {
         assert!( accept_6_1.contains("....".chars()));
         assert!(!accept_6_1.contains(".....".chars()));
         assert!( accept_6_1.contains("......".chars()));
+    }
+
+    #[test]
+    fn pairing_empty() {
+        // Accepts even length words
+        let automaton_even = Dfa::from_edges(vec![
+            (0, '.', 1),
+            (1, '.', 0),
+        ], vec![0]);
+
+        // Accepts odd length words
+        let automaton_odd = Dfa::from_edges(vec![
+            (0, '.', 1),
+            (1, '.', 0),
+        ], vec![1]);
+
+        // Accepts words with `len(w) % 3 == 0`
+        let automaton_3 = Dfa::from_edges(vec![
+            (0, '.', 1),
+            (1, '.', 2),
+            (2, '.', 0),
+        ], vec![0]);
+
+        assert!(!automaton_even.pair_empty(&automaton_3, &|lhs, rhs| lhs & rhs));
+        assert!(!automaton_even.pair_empty(&automaton_3, &|lhs, rhs| lhs | rhs));
+
+        assert!( automaton_even.pair_empty(&automaton_odd, &|lhs, rhs| lhs & rhs));
+        assert!( automaton_even.pair_empty(&automaton_odd, &|lhs, rhs| !(lhs | rhs)));
     }
 }
