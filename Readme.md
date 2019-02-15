@@ -43,6 +43,31 @@ There are more features planned and/or in development
 * Converters–all of (`dfa`, `nfa`, `regex`) are equivalent
 * Joins, Compositions, Intersects, Differences, Equivalence checks
 * Minimalization
-* Modeling solutions to linear integer (in-)equalities with finite automata
 * Finite-state Transducers–and compositions
+  - Join, Pre, Post
+  - Membership, Projections
+  - Modeling solutions to linear integer (in-)equalities with finite automata
+* Finite length languages
+  - Minimization
+  - Construction from NFA
+  - Projection, Join, Pre, Post
+* Decision Diagrams
+  - Intersect, complement
+  - Minimization
+* Infinite-word automata
+  - Büchi, Co-Büchi
+  - NBA, Regex
+  - DBA
+  - Muller
+  - Rabin
+  - Streett
+  - Parity
+* Algorithms on infinite automata
+  - Union, Intersection
+  - Complement
+  - Emptiness
+  - Emerson-Lei (liveliness)
+* Second-order logic
+  - Finite word
+  - Infinite universes
 
