@@ -341,6 +341,14 @@ impl From<isize> for Id {
     }
 }
 
+impl From<String> for Edge {
+    fn from(id: String) -> Self {
+        Edge {
+            label: Some(id.into()),
+        }
+    }
+}
+
 impl fmt::Display for IdEnum {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {

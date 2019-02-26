@@ -3,10 +3,11 @@
 //! Tests a new kind of automata maybe capable of recognizing `a^nb^nc^n` (i.e. more powerful than
 //! context free) but still O(n) space and O(n) time.
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 use std::iter::IntoIterator;
 use std::sync::Arc;
 
-use crate::dot::GraphWriter;
+use crate::dot::{Family, GraphWriter};
 use super::Alphabet;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -52,13 +53,14 @@ pub enum EdgeTarget<A> {
     Target(A),
 }
 
-pub trait CreatorFn<A> {
+pub trait CreatorFn<A>: fmt::Debug {
     fn is_final(&self) -> bool;
     fn edge(&self, character: A) -> NewEdge<A>;
 }
 
 pub struct SimpleCreator<F> {
     pub is_final: bool,
+    pub label: String,
     pub edge: F,
 }
 
@@ -234,6 +236,42 @@ impl<A: Alphabet> Dma<A> {
         }
         new_state
     }
+
+    fn print<W: std::io::Write>(&self, mut dot: GraphWriter<W>) -> std::io::Result<()> {
+        struct PrTransition<'a, A: Alphabet>(&'a Dma<A>, Option<&'a TransitionKind>);
+
+        impl<'a, A: Alphabet> fmt::Debug for PrTransition<'a, A> {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                match self.1 {
+                    None => write!(f, "Invalid"),
+                    Some(TransitionKind::Standard) => write!(f, "Standard"),
+                    Some(TransitionKind::Creating { creator }) => match self.0.creator.get(creator.0) {
+                        None => write!(f, "Invalid creator"),
+                        Some(creator) => write!(f, "({:?})", creator),
+                    }
+                }
+            }
+        }
+
+        let tr_count = self.alphabet.len();
+        assert!(self.edges.len() >= self.next_state*tr_count);
+        for from in 0..self.next_state {
+            for (i, edge) in self.edges[from*tr_count..from*tr_count + tr_count].iter().enumerate() {
+                let transition = PrTransition(self, self.transitions.get(edge.transition.0));
+                dot.segment(
+                    [from, edge.target.0].into_iter().cloned(),
+                    Some(format!("{:?}:  {:?}", 
+                            self.alphabet[i],
+                            transition,
+                        ).into()))?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn write_to(&self, write: impl std::io::Write) -> std::io::Result<()> {
+        self.print(GraphWriter::new(write, Family::Directed, None)?)
+    }
 }
 
 impl<A: Alphabet> Run<A> {
@@ -248,8 +286,12 @@ impl<A: Alphabet> Run<A> {
         self.backing.final_states.contains(&self.state)
     }
 
-    pub fn print<W: std::io::Write>(&self, dot: GraphWriter<W>) -> std::io::Result<()> {
-        unimplemented!()
+    fn print<W: std::io::Write>(&self, dot: GraphWriter<W>) -> std::io::Result<()> {
+        self.backing.print(dot)
+    }
+
+    pub fn write_to(&self, write: impl std::io::Write) -> std::io::Result<()> {
+        self.print(GraphWriter::new(write, Family::Directed, None)?)
     }
 
     fn transition_to(&mut self, target: State, kind: TransitionKind) -> Result<(), Error> {
@@ -265,6 +307,12 @@ impl<A: Alphabet> Run<A> {
     fn create(&mut self, blueprint: State, creator: Arc<CreatorFn<A>>) -> Result<(), Error> {
         let new_state = self.backing.derive_state(blueprint, creator)?;
         Ok(self.state = new_state)
+    }
+}
+
+impl<F> fmt::Debug for SimpleCreator<F> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.label)
     }
 }
 

@@ -55,6 +55,7 @@ fn dma() {
     let standard = automaton.standard_transition();
     let ctransition = automaton.new_transition(SimpleCreator {
         is_final: false,
+        label: "pusher".into(),
         edge: |alph| {
             match alph {
                 'a' => NewEdge {
@@ -77,6 +78,11 @@ fn dma() {
         (1.into(), standard),
         (1.into(), standard),
     ]);
+
+    let mut output = Vec::new();
+    automaton.write_to(&mut output).unwrap();
+    fs::write("./output/dma.dot", output)
+        .expect("Failed to write dfa dot file");
 }
 
 // Try to run `dot` for all files to convert to png, optionally.
