@@ -5,6 +5,7 @@ use std::fs;
 use std::process;
 
 use automata::dfa::Dfa;
+use automata::dma::{Dma, EdgeTarget, NewEdge, SimpleCreator};
 use automata::nfa::Nfa;
 
 fn main() {
@@ -13,9 +14,10 @@ fn main() {
     
     dfa();
     nfa();
+    dma();
 
     convert();
-    view();
+    // view();
 }
 
 fn dfa() {
@@ -46,6 +48,35 @@ fn nfa() {
     automaton.write_to(&mut output).unwrap();
     fs::write("./output/nfa.dot", output)
         .expect("Failed to write dfa dot file");
+}
+
+fn dma() {
+    let mut automaton = Dma::new(&['a', 'b']);
+    let standard = automaton.standard_transition();
+    let ctransition = automaton.new_transition(SimpleCreator {
+        is_final: false,
+        edge: |alph| {
+            match alph {
+                'a' => NewEdge {
+                    target: EdgeTarget::SelfCycle,
+                    kind: 0.into(),
+                },
+                'b' => NewEdge {
+                    target: EdgeTarget::Target('a'),
+                    kind: 1.into(),
+                },
+                _ => unreachable!("Never called outside alphabet"),
+            }
+        },
+    });
+    automaton.new_state(false, &[
+        (0.into(), ctransition),
+        (1.into(), standard), // Into garbage state
+    ]);
+    automaton.new_state(false, &[ // Garbage state
+        (1.into(), standard),
+        (1.into(), standard),
+    ]);
 }
 
 // Try to run `dot` for all files to convert to png, optionally.

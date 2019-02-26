@@ -3,8 +3,10 @@
 //! Tests a new kind of automata maybe capable of recognizing `a^nb^nc^n` (i.e. more powerful than
 //! context free) but still O(n) space and O(n) time.
 use std::collections::{HashMap, HashSet};
+use std::iter::IntoIterator;
 use std::sync::Arc;
 
+use crate::dot::GraphWriter;
 use super::Alphabet;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -17,7 +19,7 @@ pub struct Creator(pub usize);
 pub struct Transition(pub usize);
 
 #[derive(Clone, Copy)]
-pub enum TransitionKind {
+enum TransitionKind {
     Standard,
     Creating {
         /// Index of the creator function.
@@ -53,6 +55,11 @@ pub enum EdgeTarget<A> {
 pub trait CreatorFn<A> {
     fn is_final(&self) -> bool;
     fn edge(&self, character: A) -> NewEdge<A>;
+}
+
+pub struct SimpleCreator<F> {
+    pub is_final: bool,
+    pub edge: F,
 }
 
 pub enum Error {
@@ -97,6 +104,24 @@ pub struct Run<A: Alphabet> {
 }
 
 impl<A: Alphabet> Dma<A> {
+    pub fn new(alphabet: &[A]) -> Self {
+        Dma {
+            alphabet: Vec::from(alphabet),
+            lut: alphabet.iter().cloned().enumerate().map(|(idx, c)| (c, idx)).collect(),
+            next_state: 0,
+            final_states: HashSet::new(),
+            edges: Vec::new(),
+            transitions: vec![TransitionKind::Standard],
+            creator: Vec::new(),
+        }
+    }
+
+    /// The alphabet (not necessarily in normal order).
+    pub fn alphabet(&self) -> &[A] {
+        self.alphabet.as_slice()
+    }
+
+    /// Begin a new run with this machine.
     pub fn run(&self) -> Run<A> {
         assert!(self.next_state > 0, "Can not run an empty automaton");
 
@@ -104,6 +129,46 @@ impl<A: Alphabet> Dma<A> {
             backing: self.clone(),
             state: State(0),
         }
+    }
+
+    /// Create a new kind of transition with the specified creator.
+    ///
+    /// Note that the transition count is incremental for your convenience. The caller does not
+    /// need to use the return value.
+    pub fn new_transition<C: CreatorFn<A> + 'static>(&mut self, creator: C) -> Transition {
+        let creator = self.new_creator_impl(creator);
+        self.new_transition_impl(creator)
+    }
+
+    fn new_transition_impl<C: Into<Creator>>(&mut self, tr: C) -> Transition {
+        let new_id = Transition(self.transitions.len());
+        self.transitions.push(TransitionKind::Creating { creator: tr.into() });
+        new_id
+    }
+
+    fn new_creator_impl<C: CreatorFn<A> + 'static>(&mut self, creator: C) -> Creator {
+        let new_id = Creator(self.creator.len());
+        self.creator.push(Arc::new(creator));
+        new_id
+    }
+
+    /// Get the transition index of the default transition kind that does not create a node.
+    pub fn standard_transition(&self) -> Transition {
+        Transition(0)
+    }
+
+    /// Supply edges for a new state in the alphabet order.
+    ///
+    /// # Panics
+    ///
+    /// When the edge count is not consistent with the alphabet.
+    pub fn new_state(&mut self, is_final: bool, edges: &[(State, Transition)]) -> State {
+        assert!(edges.len() == edges.len());
+
+        self.add_state(is_final, edges.iter().map(|&(target, transition)| Edge {
+            target,
+            transition,
+        }))
     }
 
     /// The character index.
@@ -125,7 +190,7 @@ impl<A: Alphabet> Dma<A> {
         self.creator.get(index).cloned()
     }
 
-    fn new_state(&mut self, blueprint: State, creator: Arc<CreatorFn<A>>) -> Result<State, Error> {
+    fn derive_state(&mut self, blueprint: State, creator: Arc<CreatorFn<A>>) -> Result<State, Error> {
         let tr_count = self.alphabet.len();
         let blueprint = blueprint.0;
         if blueprint >= self.next_state {
@@ -154,13 +219,20 @@ impl<A: Alphabet> Dma<A> {
             });
         }
 
-        self.edges.append(&mut new_edges);
+        let new_state = self.add_state(creator.is_final(), new_edges.drain(..));
+        Ok(new_state)
+    }
+
+    fn add_state<E>(&mut self, is_final: bool, edges: E) -> State 
+        where E: IntoIterator<Item=Edge>
+    {
+        let new_state = State(self.next_state);
+        self.edges.extend(edges);
         self.next_state += 1;
-        if creator.is_final() {
+        if is_final {
             self.final_states.insert(new_state);
         }
-
-        Ok(new_state)
+        new_state
     }
 }
 
@@ -176,6 +248,10 @@ impl<A: Alphabet> Run<A> {
         self.backing.final_states.contains(&self.state)
     }
 
+    pub fn print<W: std::io::Write>(&self, dot: GraphWriter<W>) -> std::io::Result<()> {
+        unimplemented!()
+    }
+
     fn transition_to(&mut self, target: State, kind: TransitionKind) -> Result<(), Error> {
         match kind {
             TransitionKind::Standard => Ok(self.state = target),
@@ -187,7 +263,48 @@ impl<A: Alphabet> Run<A> {
     }
 
     fn create(&mut self, blueprint: State, creator: Arc<CreatorFn<A>>) -> Result<(), Error> {
-        let new_state = self.backing.new_state(blueprint, creator)?;
+        let new_state = self.backing.derive_state(blueprint, creator)?;
         Ok(self.state = new_state)
+    }
+}
+
+impl<F, A> CreatorFn<A> for SimpleCreator<F>
+    where A: Alphabet, F: Fn(A) -> NewEdge<A> 
+{
+    fn is_final(&self) -> bool {
+        self.is_final
+    }
+
+    fn edge(&self, character: A) -> NewEdge<A> {
+        (self.edge)(character)
+    }
+}
+
+impl From<usize> for State {
+    fn from(idx: usize) -> State {
+        State(idx)
+    }
+}
+
+impl From<usize> for Transition {
+    fn from(idx: usize) -> Transition {
+        Transition(idx)
+    }
+}
+
+impl From<usize> for Creator {
+    fn from(idx: usize) -> Creator {
+        Creator(idx)
+    }
+}
+
+impl From<Option<Creator>> for TransitionKind {
+    fn from(c: Option<Creator>) -> Self {
+        match c {
+            None => TransitionKind::Standard,
+            Some(c) => TransitionKind::Creating {
+                creator:c
+            },
+        }
     }
 }
