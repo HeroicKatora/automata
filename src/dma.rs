@@ -7,7 +7,7 @@ use std::fmt;
 use std::iter::IntoIterator;
 use std::sync::Arc;
 
-use crate::dot::{Family, GraphWriter};
+use crate::dot::{Family, GraphWriter, Node};
 use super::Alphabet;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -262,7 +262,15 @@ impl<A: Alphabet> Dma<A> {
 
         let tr_count = self.alphabet.len();
         assert!(self.edges.len() >= self.next_state*tr_count);
+
         for from in 0..self.next_state {
+            if self.final_states.contains(&State(from)) {
+                dot.node(from.into(), Some(Node {
+                    label: None,
+                    peripheries: Some(2),
+                }))?;
+            }
+
             for (i, edge) in self.edges[from*tr_count..from*tr_count + tr_count].iter().enumerate() {
                 let transition = PrTransition(self, self.transitions.get(edge.transition.0));
                 dot.segment(
@@ -273,6 +281,7 @@ impl<A: Alphabet> Dma<A> {
                         ).into()))?;
             }
         }
+
         Ok(())
     }
 
