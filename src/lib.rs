@@ -1,4 +1,5 @@
 pub mod dfa;
+pub mod dma;
 pub mod dot;
 pub mod nfa;
 pub mod regex;
