@@ -15,3 +15,7 @@ license = "MIT"
 maintenance = { status = "actively-developed" }
 
 [dependencies]
+
+[features]
+# Feature for experiments that don't have any widespread papers available. To my knowledge.
+self_experiments = []

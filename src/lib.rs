@@ -1,4 +1,5 @@
 pub mod dfa;
+#[cfg(feature = "self_experiments")]
 pub mod dma;
 pub mod dot;
 pub mod nfa;

@@ -5,6 +5,7 @@ use std::fs;
 use std::process;
 
 use automata::dfa::Dfa;
+#[cfg(feature = "self_experiments")]
 use automata::dma::{Dma, EdgeTarget, NewEdge, SimpleCreator};
 use automata::nfa::Nfa;
 
@@ -14,6 +15,7 @@ fn main() {
     
     dfa();
     nfa();
+    #[cfg(feature = "self_experiments")]
     dma();
 
     convert();
@@ -50,6 +52,7 @@ fn nfa() {
         .expect("Failed to write dfa dot file");
 }
 
+#[cfg(feature = "self_experiments")]
 fn dma() {
     // $ is the new symbol to stay connected to the invalid sink.
     let mut automaton = Dma::new(&['a', 'b', '$']);
