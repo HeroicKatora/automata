@@ -51,38 +51,131 @@ fn nfa() {
 }
 
 fn dma() {
-    let mut automaton = Dma::new(&['a', 'b']);
+    // $ is the new symbol to stay connected to the invalid sink.
+    let mut automaton = Dma::new(&['a', 'b', '$']);
     let standard = automaton.standard_transition();
-    let ctransition = automaton.new_transition(SimpleCreator {
+    // 0: standard, 1: init, 2: push, 3: unpush, 4: finish.
+    let init_transition = automaton.new_transition(SimpleCreator {
         is_final: false,
-        label: "pusher".into(),
+        label: "init".into(),
         edge: |alph| {
             match alph {
                 'a' => NewEdge {
+                    // a is the creating edge, with push creator.
                     target: EdgeTarget::SelfCycle,
-                    kind: 0.into(),
+                    kind: Some(2.into()),
                 },
                 'b' => NewEdge {
+                    // b targets the one we are coming from, with finish transition.
                     target: EdgeTarget::Target('a'),
-                    kind: 1.into(),
+                    kind: Some(4.into()),
+                },
+                '$' => NewEdge {
+                    // '$' targets the invalid sink.
+                    target: EdgeTarget::Target('$'),
+                    kind: Some(0.into()),
                 },
                 _ => unreachable!("Never called outside alphabet"),
             }
         },
     });
-    automaton.new_state(false, &[
-        (0.into(), ctransition),
+
+    // the push transition.
+    automaton.new_transition(SimpleCreator {
+        is_final: false,
+        label: "push".into(),
+        edge: |alph| {
+            match alph {
+                'a' => NewEdge {
+                    // a is the next creating edge.
+                    target: EdgeTarget::SelfCycle,
+                    kind: Some(2.into()),
+                },
+                'b' => NewEdge {
+                    // b targets the one we are coming from, with unpush transition.
+                    target: EdgeTarget::Target('a'),
+                    kind: Some(3.into()),
+                },
+                '$' => NewEdge {
+                    // '$' targets the invalid sink.
+                    target: EdgeTarget::Target('$'),
+                    kind: Some(0.into()),
+                },
+                _ => unreachable!("Never called outside alphabet"),
+            }
+        },
+    });
+
+    // the unpush transition.
+    automaton.new_transition(SimpleCreator {
+        is_final: false,
+        label: "unpush".into(),
+        edge: |alph| {
+            match alph {
+                'a' => NewEdge {
+                    // a is invalid, only bs from now on. This is why we have the $ symbol.
+                    target: EdgeTarget::Target('$'),
+                    kind: Some(0.into()),
+                },
+                'b' => NewEdge {
+                    // b the next unpush transition. **Copy** the type of transition that is there.
+                    target: EdgeTarget::Target('b'),
+                    kind: None,
+                },
+                '$' => NewEdge {
+                    // '$' targets the invalid sink.
+                    target: EdgeTarget::Target('$'),
+                    kind: Some(0.into()),
+                },
+                _ => unreachable!("Never called outside alphabet"),
+            }
+        },
+    });
+
+    // the final transition.
+    automaton.new_transition(SimpleCreator {
+        is_final: true,
+        label: "finish".into(),
+        edge: |_| NewEdge {
+            // all following content is invalid.
+            target: EdgeTarget::Target('$'),
+            kind: Some(0.into()),
+        }
+    });
+
+    automaton.new_state(true, &[
+        (0.into(), init_transition),
         (1.into(), standard), // Into garbage state
+        (1.into(), standard),
     ]);
     automaton.new_state(false, &[ // Garbage state
+        (1.into(), standard),
         (1.into(), standard),
         (1.into(), standard),
     ]);
 
     let mut output = Vec::new();
     automaton.write_to(&mut output).unwrap();
-    fs::write("./output/dma.dot", output)
+    fs::write("./output/dma.dot", &mut output)
         .expect("Failed to write dfa dot file");
+
+    {
+        output.clear();
+        let mut run = automaton.run();
+        assert!(run.matches("".chars()).unwrap());
+        run.write_to(&mut output).unwrap();
+        fs::write("./output/dma_eps.dot", &mut output)
+            .expect("Failed to write dma run dot file");
+    }
+
+    {
+        output.clear();
+        let mut run = automaton.run();
+        assert!(run.matches("aaabbb".chars()).unwrap());
+        run.write_to(&mut output).unwrap();
+        fs::write("./output/dma_aaabbb.dot", &mut output)
+            .expect("Failed to write dma run dot file");
+    }
 }
 
 // Try to run `dot` for all files to convert to png, optionally.

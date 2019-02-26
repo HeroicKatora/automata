@@ -42,7 +42,7 @@ pub struct NewEdge<A> {
     pub target: EdgeTarget<A>,
 
     /// Which transition type to use.
-    pub kind: Transition,
+    pub kind: Option<Transition>,
 }
 
 pub enum EdgeTarget<A> {
@@ -64,6 +64,7 @@ pub struct SimpleCreator<F> {
     pub edge: F,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum Error {
     /// A character was not part of the alphabet.
     InvalidChar,
@@ -192,9 +193,13 @@ impl<A: Alphabet> Dma<A> {
         self.creator.get(index).cloned()
     }
 
-    fn derive_state(&mut self, blueprint: State, creator: Arc<CreatorFn<A>>) -> Result<State, Error> {
+    fn derive_state(&mut self, blueprint: State, creator: Creator) -> Result<State, Error> {
+        let own_kind = Transition(creator.0 + 1);
+        let creator = self.creator(creator.0)
+            .ok_or(Error::NoSuchCreator)?;
         let tr_count = self.alphabet.len();
         let blueprint = blueprint.0;
+
         if blueprint >= self.next_state {
             return Err(Error::NoSuchState)
         }
@@ -207,14 +212,16 @@ impl<A: Alphabet> Dma<A> {
         let mut new_edges = vec![];
         for alph in self.alphabet.iter().cloned() {
             let NewEdge { target: new_target, kind } = creator.edge(alph);
-            let target = match new_target {
-                EdgeTarget::SelfCycle => new_state,
+            let (target, alt_kind) = match new_target {
+                EdgeTarget::SelfCycle => (new_state, own_kind),
                 EdgeTarget::Target(alph) => {
                     let index = self.index(alph)?;
                     assert!(index < tr_count);
-                    self.edges[tr_start + index].target
+                    let edge = self.edges[tr_start + index];
+                    (edge.target, edge.transition)
                 }
             };
+            let kind = kind.unwrap_or(alt_kind);
             new_edges.push(Edge {
                 target,
                 transition: kind,
@@ -282,6 +289,11 @@ impl<A: Alphabet> Run<A> {
         self.transition_to(target, kind)
     }
 
+    pub fn matches(&mut self, iter: impl IntoIterator<Item=A>) -> Result<bool, Error> {
+        iter.into_iter().try_for_each(|ch| self.next(ch))?;
+        Ok(self.is_final())
+    }
+
     pub fn is_final(&self) -> bool {
         self.backing.final_states.contains(&self.state)
     }
@@ -297,14 +309,11 @@ impl<A: Alphabet> Run<A> {
     fn transition_to(&mut self, target: State, kind: TransitionKind) -> Result<(), Error> {
         match kind {
             TransitionKind::Standard => Ok(self.state = target),
-            TransitionKind::Creating { creator } => {
-                let creator = self.backing.creator(creator.0).ok_or(Error::NoSuchCreator)?;
-                self.create(target, creator)
-            }
+            TransitionKind::Creating { creator } => self.create(target, creator),
         }
     }
 
-    fn create(&mut self, blueprint: State, creator: Arc<CreatorFn<A>>) -> Result<(), Error> {
+    fn create(&mut self, blueprint: State, creator: Creator) -> Result<(), Error> {
         let new_state = self.backing.derive_state(blueprint, creator)?;
         Ok(self.state = new_state)
     }
