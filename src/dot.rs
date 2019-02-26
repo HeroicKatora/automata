@@ -134,7 +134,7 @@ impl<W: Write> GraphWriter<W> {
     pub fn node(&mut self, id: Id, node: Option<Node>) -> io::Result<()> {
         let fmt = self.inner.as_mut().unwrap();
 
-        write!(fmt, "\t{} ", id);
+        write!(fmt, "\t{} ", id)?;
 
         if let Some(options) = node {
             write!(fmt, "[{}];\n", options)
