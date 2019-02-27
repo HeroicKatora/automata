@@ -19,3 +19,4 @@ maintenance = { status = "actively-developed" }
 [features]
 # Feature for experiments that don't have any widespread papers available. To my knowledge.
 self_experiments = []
+default = ["self_experiments"]

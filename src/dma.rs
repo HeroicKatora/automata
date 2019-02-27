@@ -49,6 +49,12 @@ pub enum EdgeTarget<A> {
     /// That edge should be back to the new node.
     SelfCycle,
 
+    /// Target the edge where the current edge is coming from.
+    From,
+
+    /// Target the original target of the creating edge.
+    To,
+
     /// The edge should point to some node connected to the target.
     Target(A),
 }
@@ -104,6 +110,12 @@ pub struct Dma<A: Alphabet> {
 pub struct Run<A: Alphabet> {
     backing: Dma<A>,
     state: State,
+}
+
+struct Derivation {
+    from: State,
+    to: State,
+    creator: Creator,
 }
 
 impl<A: Alphabet> Dma<A> {
@@ -193,12 +205,13 @@ impl<A: Alphabet> Dma<A> {
         self.creator.get(index).cloned()
     }
 
-    fn derive_state(&mut self, blueprint: State, creator: Creator) -> Result<State, Error> {
+    fn derive_state(&mut self, ctx: Derivation) -> Result<State, Error> {
+        let Derivation { from, to, creator, } = ctx;
         let own_kind = Transition(creator.0 + 1);
         let creator = self.creator(creator.0)
             .ok_or(Error::NoSuchCreator)?;
         let tr_count = self.alphabet.len();
-        let blueprint = blueprint.0;
+        let blueprint = to.0;
 
         if blueprint >= self.next_state {
             return Err(Error::NoSuchState)
@@ -214,6 +227,8 @@ impl<A: Alphabet> Dma<A> {
             let NewEdge { target: new_target, kind } = creator.edge(alph);
             let (target, alt_kind) = match new_target {
                 EdgeTarget::SelfCycle => (new_state, own_kind),
+                EdgeTarget::From => (from, own_kind),
+                EdgeTarget::To => (to, own_kind),
                 EdgeTarget::Target(alph) => {
                     let index = self.index(alph)?;
                     assert!(index < tr_count);
@@ -322,8 +337,13 @@ impl<A: Alphabet> Run<A> {
         }
     }
 
-    fn create(&mut self, blueprint: State, creator: Creator) -> Result<(), Error> {
-        let new_state = self.backing.derive_state(blueprint, creator)?;
+    fn create(&mut self, target: State, creator: Creator) -> Result<(), Error> {
+        let new_state = self.backing.derive_state(Derivation {
+            from: self.state,
+            to: target,
+            creator,
+        })?;
+
         Ok(self.state = new_state)
     }
 }
