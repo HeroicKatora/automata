@@ -260,7 +260,7 @@ impl<A: Alphabet> Dma<A> {
     }
 
     fn print<W: std::io::Write>(&self, mut dot: GraphWriter<W>) -> std::io::Result<()> {
-        struct PrTransition<'a, A: Alphabet>(&'a Dma<A>, Option<&'a TransitionKind>);
+        struct PrTransition<'a, A: Alphabet + 'a>(&'a Dma<A>, Option<&'a TransitionKind>);
 
         impl<'a, A: Alphabet> fmt::Debug for PrTransition<'a, A> {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
