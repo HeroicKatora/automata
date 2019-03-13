@@ -55,94 +55,98 @@ fn nfa() {
 #[cfg(feature = "self_experiments")]
 fn dma() {
     // $ is the new symbol to stay connected to the invalid sink.
-    let mut automaton = Dma::new(&['a', 'b', '$']);
+    let mut automaton = Dma::new(&['a', 'b', 'c', '$']);
     let standard = automaton.standard_transition();
     // 0: standard, 1: init, 2: push, 3: unpush, 4: finish.
     let init_transition = automaton.new_transition(SimpleCreator {
         is_final: false,
         label: "init".into(),
-        edge: |alph| {
-            match alph {
-                'a' => NewEdge {
-                    // a is the creating edge, with push creator.
-                    target: EdgeTarget::SelfCycle,
-                    kind: Some(2.into()),
-                },
-                'b' => NewEdge {
-                    // b targets the one we are coming from, with finish transition.
-                    target: EdgeTarget::Target('a'),
-                    kind: Some(4.into()),
-                },
-                '$' => NewEdge {
-                    // '$' targets the invalid sink.
-                    target: EdgeTarget::Target('$'),
-                    kind: Some(0.into()),
-                },
-                _ => unreachable!("Never called outside alphabet"),
-            }
+        edge: |alph| match alph {
+            'a' => NewEdge {
+                // a is the creating edge, with push creator.
+                target: EdgeTarget::SelfCycle,
+                kind: Some(2.into()),
+            },
+            'b' => NewEdge {
+                // b targets the one we are coming from, with finish transition.
+                target: EdgeTarget::Target('a'),
+                kind: Some(4.into()),
+            },
+            'c' | '$' => NewEdge {
+                // '$' targets the invalid sink.
+                target: EdgeTarget::Target('$'),
+                kind: Some(0.into()),
+            },
+            _ => unreachable!("Never called outside alphabet"),
         },
     });
 
     // the push transition.
     automaton.new_transition(SimpleCreator {
         is_final: false,
-        label: "push".into(),
-        edge: |alph| {
-            match alph {
-                'a' => NewEdge {
-                    // a is the next creating edge.
-                    target: EdgeTarget::SelfCycle,
-                    kind: Some(2.into()),
-                },
-                'b' => NewEdge {
-                    // b targets the one we are coming from, with unpush transition.
-                    target: EdgeTarget::Target('a'),
-                    kind: Some(3.into()),
-                },
-                '$' => NewEdge {
-                    // '$' targets the invalid sink.
-                    target: EdgeTarget::Target('$'),
-                    kind: Some(0.into()),
-                },
-                _ => unreachable!("Never called outside alphabet"),
-            }
+        label: "a_push".into(),
+        edge: |alph| match alph {
+            'a' => NewEdge {
+                // a is the next creating edge.
+                target: EdgeTarget::SelfCycle,
+                kind: Some(2.into()),
+            },
+            'b' => NewEdge {
+                // b targets the one we are coming from, with unpush transition.
+                target: EdgeTarget::From,
+                kind: Some(3.into()),
+            },
+            'c' | '$' => NewEdge {
+                // '$' targets the invalid sink in every node.
+                target: EdgeTarget::Target('$'),
+                kind: Some(0.into()),
+            },
+            _ => unreachable!("Never called outside alphabet"),
         },
     });
 
     // the unpush transition.
     automaton.new_transition(SimpleCreator {
         is_final: false,
-        label: "unpush".into(),
-        edge: |alph| {
-            match alph {
-                'a' => NewEdge {
-                    // a is invalid, only bs from now on. This is why we have the $ symbol.
-                    target: EdgeTarget::Target('$'),
-                    kind: Some(0.into()),
-                },
-                'b' => NewEdge {
-                    // b the next unpush transition. **Copy** the type of transition that is there.
-                    target: EdgeTarget::Target('b'),
-                    kind: None,
-                },
-                '$' => NewEdge {
-                    // '$' targets the invalid sink.
-                    target: EdgeTarget::Target('$'),
-                    kind: Some(0.into()),
-                },
-                _ => unreachable!("Never called outside alphabet"),
-            }
+        label: "b_push".into(),
+        edge: |alph| match alph {
+            'a' => NewEdge {
+                // a is invalid, only bs from now on. This is why we have the $ symbol.
+                target: EdgeTarget::Target('$'),
+                kind: Some(0.into()),
+            },
+            'b' => NewEdge {
+                // b the next unpush transition. **Copy** the type of transition that is there.
+                target: EdgeTarget::Target('b'),
+                kind: None,
+            },
+            'c' => NewEdge {
+                target: EdgeTarget::From,
+                kind: Some(5.into()),
+            },
+            '$' => NewEdge {
+                // '$' targets the invalid sink.
+                target: EdgeTarget::Target('$'),
+                kind: Some(0.into()),
+            },
+            _ => unreachable!("Never called outside alphabet"),
         },
     });
 
     // the final transition.
     automaton.new_transition(SimpleCreator {
         is_final: true,
-        label: "finish".into(),
-        edge: |_| NewEdge {
+        label: "b_finish".into(),
+        edge: |alph| match alph {
+            'c' => NewEdge {
+                target: EdgeTarget::From,
+                kind: Some(5.into()),
+            },
             // all following content is invalid.
-            target: EdgeTarget::Target('$'),
-            kind: Some(0.into()),
+            _ => NewEdge {
+                target: EdgeTarget::Target('$'),
+                kind: Some(0.into()),
+            },
         }
     });
 
@@ -150,8 +154,10 @@ fn dma() {
         (0.into(), init_transition),
         (1.into(), standard), // Into garbage state
         (1.into(), standard),
+        (1.into(), standard),
     ]);
     automaton.new_state(false, &[ // Garbage state
+        (1.into(), standard),
         (1.into(), standard),
         (1.into(), standard),
         (1.into(), standard),
