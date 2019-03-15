@@ -2,23 +2,21 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Debug};
 use std::io::{self, Write};
 
-use super::{Alphabet, Ensure};
-use super::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
-use super::regex::Regex;
+use crate::{Alphabet, Ensure};
+use crate::deterministic::Deterministic;
+use crate::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
+use crate::regex::Regex;
 
 /// A node handle.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub struct Node(pub usize);
 
 pub struct Dfa<A: Alphabet> {
-    /// Edges of the graph, each list sorted against the alphabet.
-    edges: Vec<Vec<(A, Node)>>,
+    /// The deterministic graph, also stores the alphabet.
+    graph: Deterministic<A>,
 
     /// Final or accepting states.
     finals: HashSet<Node>,
-
-    /// A sorted list of the alphabet, to allow quick comparison.
-    alphabet: Vec<A>,
 }
 
 impl<A: Alphabet> Dfa<A> {
@@ -128,7 +126,7 @@ impl<A: Alphabet> Dfa<A> {
 
     /// The alphabet is the set of symbols in words of that language.
     pub fn alphabet(&self) -> &[A] {
-        self.alphabet.as_slice()
+        self.graph.alphabet()
     }
 
     /// Minimize the automata into its language partition.

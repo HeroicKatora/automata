@@ -75,6 +75,19 @@ enum IdEnum {
     // Html(String),
 }
 
+/// Trait for structures that can be dumped as a dot graph.
+pub trait DotGraph {
+    /// Write a dot representation.
+    fn dot_graph<W>(&self, to: W) -> io::Result<()>;
+}
+
+/// Extension to `std::io::Write` for writing dot graphs.
+pub trait WriteDot: io::Write {
+    fn write_dot<D: DotGraph>(&mut self, graph: D) -> io::Result<()> {
+        graph.dot_graph(self)
+    }
+}
+
 impl<W: Write> GraphWriter<W> {
     /// Begins writing a graph with the given parameters.
     pub fn new(mut inner: W, family: Family, name: Option<Id>) -> io::Result<Self> {

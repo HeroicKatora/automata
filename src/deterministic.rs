@@ -3,10 +3,14 @@
 //! Models graphs where each node has *at most* one outgoing edge for each character in a certain
 //! alphabet. Through a simple utility check it can be used to also model graphs with exactly one
 //! such edge.
+use std::fmt::Display;
 use std::iter::IntoIterator;
+use std::io::{self, Write};
 use std::num::NonZeroUsize;
+use std::ops::Index;
 
-use super::Alphabet;
+use crate::Alphabet;
+use crate::dot::{Edge, Family, GraphWriter};
 
 pub struct Deterministic<A> {
     /// Characters of the underlying alphabet.
@@ -14,6 +18,14 @@ pub struct Deterministic<A> {
 
     /// Outgoing edges for each graph node, one space for each character.
     edges: Vec<Option<Target>>,
+
+    /// The ide for the next node.
+    next_id: usize,
+}
+
+pub struct Edges<'a, A> {
+    alph: &'a [A],
+    targets: &'a [Option<Target>],
 }
 
 /// The target of an existing edge.
@@ -35,6 +47,7 @@ impl<A: Alphabet> Deterministic<A> {
         Deterministic {
             alphabet,
             edges: vec![],
+            next_id: 0,
         }
     }
 
@@ -57,6 +70,30 @@ impl<A: Alphabet> Deterministic<A> {
     pub fn node(&mut self) -> Target {
         unimplemented!()
     }
+
+    pub fn edges(&mut self, target: Target) -> Option<Edges<A>> {
+        unimplemented!()
+    }
+
+    pub fn write_to(&self, output: &mut Write) -> io::Result<()>
+        where for<'a> &'a A: Display
+    {
+        let mut writer = GraphWriter::new(output, Family::Directed, None)?;
+
+        for from in 0..self.next_id {
+            for (label, to) in self.edges(Target::new(from).unwrap()).unwrap() {
+                let edge = Edge {
+                    label: Some(format!("{}", label).into()),
+                    .. Edge::none()
+                };
+
+                writer.segment([from, to.index()].iter().cloned(), Some(edge))?;
+            }
+        }
+
+        writer.end_into_inner().1
+    }
+
 }
 
 impl Target {
@@ -68,5 +105,21 @@ impl Target {
     /// Get edge target index with which this was created.
     pub fn index(self) -> usize {
         self.0.get().wrapping_sub(1)
+    }
+}
+
+impl<A: Alphabet> Index<Target> for Deterministic<A> {
+    type Output = [Option<Target>];
+
+    fn index(&self, target: Target) -> &[Option<Target>] {
+        self.edges(target).unwrap().targets
+    }
+}
+
+impl<'a, A> Iterator for Edges<'a, A> {
+    type Item = (&'a A, Target);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unimplemented!()
     }
 }
