@@ -1,9 +1,10 @@
 use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Entry;
 use std::fmt::{Display, Debug};
 use std::io::{self, Write};
 
 use crate::{Alphabet, Ensure};
-use crate::deterministic::Deterministic;
+use crate::deterministic::{Deterministic, Target};
 use crate::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
 use crate::regex::Regex;
 
@@ -16,7 +17,7 @@ pub struct Dfa<A: Alphabet> {
     graph: Deterministic<A>,
 
     /// Final or accepting states.
-    finals: HashSet<Node>,
+    finals: HashSet<Target>,
 }
 
 impl<A: Alphabet> Dfa<A> {
@@ -42,7 +43,7 @@ impl<A: Alphabet> Dfa<A> {
             check.ensure_default(from + 1);
             check.ensure_default(to + 1);
             
-            edges[from].push((a.clone(), Node(to)));
+            edges[from].push((a.clone(), to));
             check[from].insert(a);
             states.insert(from);
             states.insert(to);
@@ -50,7 +51,7 @@ impl<A: Alphabet> Dfa<A> {
 
         let finals = finals.into_iter()
             .inspect(|c| check.resize(c + 1, HashSet::new()))
-            .map(Node)
+            .map(Target::make)
             .collect();
 
         let alphabet = check.pop();
@@ -60,37 +61,44 @@ impl<A: Alphabet> Dfa<A> {
             }
         }
 
-        let mut alphabet: Vec<_> = alphabet.unwrap().into_iter().collect();
-        alphabet.sort_unstable();
+        let mut graph = Deterministic::new(alphabet.unwrap().into_iter());
 
         for edge_list in edges.iter_mut() {
             // There are never any duplicates and now the indices correspond to
             // the indices in the alphabet list.
             edge_list.sort_unstable();
+            let node = graph.node();
+            let edges = graph.edges_mut(node).unwrap().into_iter();
+            let edge_list = edge_list.iter().cloned();
+
+            for ((_, target), (_, edge_target)) in edges.zip(edge_list) {
+                *target = Some(Target::make(edge_target));
+            }
         }
 
+        assert!(graph.is_complete());
+
         Dfa {
-            edges,
+            graph,
             finals,
-            alphabet,
         }
     }
 
     /// Checks if the input word is contained in the language.
     pub fn contains<I: IntoIterator<Item=A>>(&self, sequence: I) -> bool {
         let mut sequence = sequence.into_iter();
-        let mut state = 0;
+        let mut state = Target::ZERO;
 
         while let Some(ch) = sequence.next() {
-            let edges = &self.edges[state];
-            let Node(next) = edges.iter()
-                .find(|e| e.0 == ch)
-                .map(|e| e.1)
-                .expect("Mismatch between DFA alphabet and word alphabet");
+            let next = self.graph
+                .edges(state).unwrap()
+                .target(ch)
+                .expect("Mismatch between DFA alphabet and word alphabet")
+                .unwrap();
             state = next;
         }
 
-        self.finals.contains(&Node(state))
+        self.finals.contains(&state)
     }
 
     pub fn to_regex(self) -> Regex<A> {
@@ -102,23 +110,23 @@ impl<A: Alphabet> Dfa<A> {
     {
         let mut writer = GraphWriter::new(output, Family::Directed, None)?;
 
-        for (from, edges) in self.edges.iter().enumerate() {
-            for (label, to) in edges.iter() {
+        for from in self.graph.iter() {
+            for (label, to) in self.graph.edges(from).unwrap() {
                 let edge = DotEdge { 
                     label: Some(format!("{}", label).into()),
                     .. DotEdge::none()
                 };
 
-                writer.segment([from, to.0].iter().cloned(), Some(edge))?;
+                writer.segment([from.index(), to.index()].iter().cloned(), Some(edge))?;
             }
         }
 
-        for Node(fin) in self.finals.iter().cloned() {
+        for fin in self.finals.iter().cloned() {
             let node = DotNode {
                 peripheries: Some(2),
                 .. DotNode::none()
             };
-            writer.node(fin.into(), Some(node))?;
+            writer.node(fin.index().into(), Some(node))?;
         }
 
         writer.end_into_inner().1
@@ -144,38 +152,38 @@ impl<A: Alphabet> Dfa<A> {
         assert!(self.alphabet() == rhs.alphabet(), "Automata alphabets differ");
 
         let mut assigned = HashMap::new();
-        let mut working = vec![(0, 0, 0)];
-        let mut edges: Vec<Vec<(A, Node)>> = Vec::new();
+        let mut working = vec![(Target::ZERO, Target::ZERO, Target::ZERO)];
+        let mut graph = Deterministic::new(self.alphabet().iter().cloned());
         let mut finals = HashSet::new();
-        assigned.insert((0, 0), 0);
+
+        assigned.insert((Target::ZERO, Target::ZERO), Target::ZERO);
+        graph.node();
 
         while let Some((left, right, self_id)) = working.pop() {
             let decide = decider(
-                self.finals.contains(&Node(left)),
-                rhs.finals.contains(&Node(right)));
+                self.finals.contains(&left),
+                rhs.finals.contains(&right));
 
             if decide {
-                finals.insert(Node(self_id));
+                finals.insert(self_id);
             }
 
-            edges.ensure_default(self_id + 1);
-            let edges = &mut edges[self_id];
+            let left_edges = self.graph.edges(left).unwrap().into_iter();
+            let right_edges = rhs.graph.edges(right).unwrap().into_iter();
 
-            for (pos, symbol) in self.alphabet().iter().enumerate() {
-                // Gets updated when we encounter an existing node.
-                let mut node_id = assigned.len();
+            for ((symbol, new_left), (_, new_right)) in left_edges.zip(right_edges) {
+                let node_id = match assigned.entry((new_left, new_right)) {
+                    Entry::Occupied(occupied) => *occupied.get(),
+                    Entry::Vacant(vacant) => {
+                        let new_id = graph.node();
+                        working.push((new_left, new_right, new_id));
+                        vacant.insert(new_id);
+                        new_id
+                    },
+                };
 
-                let new_left = self.edges[left][pos].1;
-                let new_right = rhs.edges[right][pos].1;
-
-                assigned.entry((new_left.0, new_right.0))
-                    .and_modify(|&mut id| node_id = id)
-                    .or_insert_with(|| {
-                        working.push((new_left.0, new_right.0, node_id));
-                        node_id
-                    });
-
-                edges.push((symbol.clone(), Node(node_id)));
+                let mut edges = graph.edges_mut(self_id).unwrap();
+                *edges.target_mut(*symbol).unwrap() = Some(node_id);
             }
         }
 
@@ -183,9 +191,8 @@ impl<A: Alphabet> Dfa<A> {
             None
         } else {
             Some(Dfa {
-                edges,
-                finals,
-                alphabet: self.alphabet.clone(),
+                graph,
+                finals
             })
         }
     }
@@ -205,24 +212,24 @@ impl<A: Alphabet> Dfa<A> {
         assert!(self.alphabet() == rhs.alphabet(), "Automata alphabets differ");
 
         let mut assigned = HashSet::new();
-        let mut working = vec![(0, 0)];
-        assigned.insert((0, 0));
+        let mut working = vec![(Target::ZERO, Target::ZERO)];
+        assigned.insert((Target::ZERO, Target::ZERO));
 
         while let Some((left, right)) = working.pop() {
             let decide = decider(
-                self.finals.contains(&Node(left)),
-                rhs.finals.contains(&Node(right)));
+                self.finals.contains(&left),
+                rhs.finals.contains(&right));
 
             if decide {
                 return false;
             }
 
-            for (pos, _) in self.alphabet().iter().enumerate() {
-                let new_left = self.edges[left][pos].1;
-                let new_right = rhs.edges[right][pos].1;
+            let left_edges = self.graph.edges(left).unwrap().into_iter();
+            let right_edges = rhs.graph.edges(right).unwrap().into_iter();
 
-                if assigned.insert((new_left.0, new_right.0)) {
-                    working.push((new_left.0, new_right.0))
+            for ((_, new_left), (_, new_right)) in left_edges.zip(right_edges) {
+                if assigned.insert((new_left, new_right)) {
+                    working.push((new_left, new_right))
                 }
             }
         }

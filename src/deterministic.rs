@@ -3,11 +3,12 @@
 //! Models graphs where each node has *at most* one outgoing edge for each character in a certain
 //! alphabet. Through a simple utility check it can be used to also model graphs with exactly one
 //! such edge.
+use std::slice;
 use std::fmt::Display;
-use std::iter::IntoIterator;
+use std::iter::{self, IntoIterator};
 use std::io::{self, Write};
 use std::num::NonZeroUsize;
-use std::ops::Index;
+use std::ops::{Index, Range};
 
 use crate::Alphabet;
 use crate::dot::{Edge, Family, GraphWriter};
@@ -24,8 +25,23 @@ pub struct Deterministic<A> {
 }
 
 pub struct Edges<'a, A> {
-    alph: &'a [A],
+    alphabet: &'a [A],
     targets: &'a [Option<Target>],
+}
+
+pub struct EdgesIter<'a, A> {
+    alphabet: slice::Iter<'a, A>,
+    targets: slice::Iter<'a, Option<Target>>,
+}
+
+pub struct EdgesMut<'a, A> {
+    alphabet: &'a [A],
+    targets: &'a mut [Option<Target>],
+}
+
+pub struct EdgesIterMut<'a, A> {
+    alphabet: slice::Iter<'a, A>,
+    targets: slice::IterMut<'a, Option<Target>>,
 }
 
 /// The target of an existing edge.
@@ -64,17 +80,67 @@ impl<A: Alphabet> Deterministic<A> {
         self.alphabet.len()
     }
 
+    /// Get the number of nodes in this graph.
+    #[allow(unused)]
+    pub fn node_count(&self) -> usize {
+        self.next_id
+    }
+
     /// Create a new node in the graph.
     ///
     /// Returns the id of the newly created node.
+    ///
+    /// # Panics
+    /// When the new node id can not be represented.
     pub fn node(&mut self) -> Target {
-        unimplemented!()
+        let count = self.char_count();
+        self.edges.extend(iter::repeat(None).take(count));
+        let id = self.next_id;
+        self.next_id += 1;
+        Target::new(id).expect("Maximum node count exceeded")
     }
 
-    pub fn edges(&mut self, target: Target) -> Option<Edges<A>> {
-        unimplemented!()
+    /// Get the outgoing edges of a node.
+    pub fn edges(&self, target: Target) -> Option<Edges<A>> {
+        let range = self.valid_edges_range(target)?;
+        Some(Edges {
+            alphabet: self.alphabet.as_slice(),
+            targets: &self.edges[range],
+        })
     }
 
+    /// Get a mutable reference to the outgoing edges of a node.
+    pub fn edges_mut(&mut self, target: Target) -> Option<EdgesMut<A>> {
+        let range = self.valid_edges_range(target)?;
+        Some(EdgesMut {
+            alphabet: self.alphabet.as_slice(),
+            targets: &mut self.edges[range],
+        })
+    }
+
+    /// Check that all edges refer to valid targets.
+    pub fn is_complete(&self) -> bool {
+        self.edges.iter().all(Option::is_some)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=Target> {
+        (0..self.next_id).map(|id| Target::new(id).unwrap())
+    }
+
+    fn valid_edges_range(&self, target: Target) -> Option<Range<usize>> {
+        let idx = target.index();
+        let count = self.char_count();
+        if idx >= self.next_id {
+            return None
+        } else {
+            // None of this overflows.
+            let start = idx.checked_mul(count).unwrap();
+            let end = start.checked_add(count).unwrap();
+            Some(start..end)
+        }
+    }
+
+    #[allow(unused)]
     pub fn write_to(&self, output: &mut Write) -> io::Result<()>
         where for<'a> &'a A: Display
     {
@@ -97,14 +163,42 @@ impl<A: Alphabet> Deterministic<A> {
 }
 
 impl Target {
+    pub const ZERO: Target = Target(unsafe { NonZeroUsize::new_unchecked(1) });
+
     /// Create the target representation.
     pub fn new(index: usize) -> Option<Self> {
         NonZeroUsize::new(index.wrapping_add(1)).map(Target)
     }
 
+    /// Create the target, assuming it is valid.
+    pub fn make(index: usize) -> Self {
+        Self::new(index).unwrap()
+    }
+
     /// Get edge target index with which this was created.
     pub fn index(self) -> usize {
         self.0.get().wrapping_sub(1)
+    }
+}
+
+impl<A: Alphabet> Edges<'_, A> {
+    pub fn target(&self, ch: A) -> Result<Option<Target>, ()> {
+        self.alphabet.binary_search(&ch).map_err(|_| ())
+            .map(|idx| self.targets[idx].clone())
+    }
+}
+
+impl<A: Alphabet> EdgesMut<'_, A> {
+    #[allow(unused)]
+    pub fn target(&self, ch: A) -> Result<Option<Target>, ()> {
+        self.alphabet.binary_search(&ch).map_err(|_| ())
+            .map(|idx| self.targets[idx].clone())
+    }
+
+    pub fn target_mut(&mut self, ch: A) -> Result<&mut Option<Target>, ()> {
+        let targets = &mut self.targets;
+        self.alphabet.binary_search(&ch).map_err(|_| ())
+            .map(move |idx| &mut targets[idx])
     }
 }
 
@@ -116,10 +210,55 @@ impl<A: Alphabet> Index<Target> for Deterministic<A> {
     }
 }
 
-impl<'a, A> Iterator for Edges<'a, A> {
+impl<'a, A> IntoIterator for Edges<'a, A> {
+    type IntoIter = EdgesIter<'a, A>;
+    type Item = <EdgesIter<'a, A> as Iterator>::Item;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let Edges { alphabet, targets} = self;
+        EdgesIter {
+            alphabet: alphabet.iter(),
+            targets: targets.iter(),
+        }
+    }
+}
+
+impl<'a, A> IntoIterator for EdgesMut<'a, A> {
+    type IntoIter = EdgesIterMut<'a, A>;
+    type Item = <EdgesIterMut<'a, A> as Iterator>::Item;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let EdgesMut { alphabet, targets} = self;
+        EdgesIterMut {
+            alphabet: alphabet.iter(),
+            targets: targets.iter_mut(),
+        }
+    }
+}
+
+impl<'a, A> Iterator for EdgesIter<'a, A> {
     type Item = (&'a A, Target);
 
     fn next(&mut self) -> Option<Self::Item> {
-        unimplemented!()
+        loop {
+            let ch = self.alphabet.next();
+            let target = self.targets.next();
+            match (ch, target) {
+                (None, None) => return None,
+                (Some(ch), Some(Some(target))) => return Some((ch, *target)),
+                (Some(_), Some(None)) => (),
+                _ => unreachable!("Alphabet and target have same length"),
+            }
+        }
+    }
+}
+
+impl<'a, A> Iterator for EdgesIterMut<'a, A> {
+    type Item = (&'a A, &'a mut Option<Target>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ch = self.alphabet.next()?;
+        let target = self.targets.next().unwrap();
+        Some((ch, target))
     }
 }
