@@ -68,7 +68,7 @@ impl<A: Alphabet> Dfa<A> {
             // the indices in the alphabet list.
             edge_list.sort_unstable();
             let node = graph.node();
-            let edges = graph.edges_mut(node).unwrap().into_iter();
+            let edges = graph.iter_edges_mut(node);
             let edge_list = edge_list.iter().cloned();
 
             for ((_, target), (_, edge_target)) in edges.zip(edge_list) {
@@ -92,9 +92,7 @@ impl<A: Alphabet> Dfa<A> {
         while let Some(ch) = sequence.next() {
             let next = self.graph
                 .edges(state).unwrap()
-                .target(ch)
-                .expect("Mismatch between DFA alphabet and word alphabet")
-                .unwrap();
+                [ch].unwrap();
             state = next;
         }
 
@@ -111,7 +109,7 @@ impl<A: Alphabet> Dfa<A> {
         let mut writer = GraphWriter::new(output, Family::Directed, None)?;
 
         for from in self.graph.iter() {
-            for (label, to) in self.graph.edges(from).unwrap() {
+            for (label, to) in self.graph.iter_edges(from) {
                 let edge = DotEdge { 
                     label: Some(format!("{}", label).into()),
                     .. DotEdge::none()
@@ -168,8 +166,8 @@ impl<A: Alphabet> Dfa<A> {
                 finals.insert(self_id);
             }
 
-            let left_edges = self.graph.edges(left).unwrap().into_iter();
-            let right_edges = rhs.graph.edges(right).unwrap().into_iter();
+            let left_edges = self.graph.iter_edges(left);
+            let right_edges = rhs.graph.iter_edges(right);
 
             for ((symbol, new_left), (_, new_right)) in left_edges.zip(right_edges) {
                 let node_id = match assigned.entry((new_left, new_right)) {
@@ -183,7 +181,7 @@ impl<A: Alphabet> Dfa<A> {
                 };
 
                 let mut edges = graph.edges_mut(self_id).unwrap();
-                *edges.target_mut(*symbol).unwrap() = Some(node_id);
+                edges[*symbol] = Some(node_id);
             }
         }
 
@@ -224,8 +222,8 @@ impl<A: Alphabet> Dfa<A> {
                 return false;
             }
 
-            let left_edges = self.graph.edges(left).unwrap().into_iter();
-            let right_edges = rhs.graph.edges(right).unwrap().into_iter();
+            let left_edges = self.graph.iter_edges(left);
+            let right_edges = rhs.graph.iter_edges(right);
 
             for ((_, new_left), (_, new_right)) in left_edges.zip(right_edges) {
                 if assigned.insert((new_left, new_right)) {

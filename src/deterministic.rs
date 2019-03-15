@@ -8,7 +8,7 @@ use std::fmt::Display;
 use std::iter::{self, IntoIterator};
 use std::io::{self, Write};
 use std::num::NonZeroUsize;
-use std::ops::{Index, Range};
+use std::ops::{Index, IndexMut, Range};
 
 use crate::Alphabet;
 use crate::dot::{Edge, Family, GraphWriter};
@@ -109,6 +109,20 @@ impl<A: Alphabet> Deterministic<A> {
         })
     }
 
+    /// Iterate the edges of the specified node.
+    ///
+    /// Gives an empty iterator when the node is invalid or has no edges. Use `edges` to find out
+    /// which of the two possibilites it is.
+    pub fn iter_edges(&self, node: Target) -> EdgesIter<A> {
+        let range = self.valid_edges_range(node)
+            .unwrap_or(0..0);
+        let edges = Edges {
+            alphabet: self.alphabet.as_slice(),
+            targets: &self.edges[range],
+        };
+        edges.into_iter()
+    }
+
     /// Get a mutable reference to the outgoing edges of a node.
     pub fn edges_mut(&mut self, target: Target) -> Option<EdgesMut<A>> {
         let range = self.valid_edges_range(target)?;
@@ -116,6 +130,20 @@ impl<A: Alphabet> Deterministic<A> {
             alphabet: self.alphabet.as_slice(),
             targets: &mut self.edges[range],
         })
+    }
+
+    /// Mutably iterate the edges of the specified node.
+    ///
+    /// Gives an empty iterator when the node is invalid or has no edges. Use `edges` to find out
+    /// which of the two possibilites it is.
+    pub fn iter_edges_mut(&mut self, node: Target) -> EdgesIterMut<A> {
+        let range = self.valid_edges_range(node)
+            .unwrap_or(0..0);
+        let edges = EdgesMut {
+            alphabet: self.alphabet.as_slice(),
+            targets: &mut self.edges[range],
+        };
+        edges.into_iter()
     }
 
     /// Check that all edges refer to valid targets.
@@ -182,6 +210,7 @@ impl Target {
 }
 
 impl<A: Alphabet> Edges<'_, A> {
+    #[allow(unused)]
     pub fn target(&self, ch: A) -> Result<Option<Target>, ()> {
         self.alphabet.binary_search(&ch).map_err(|_| ())
             .map(|idx| self.targets[idx].clone())
@@ -208,6 +237,34 @@ impl<A: Alphabet> Index<Target> for Deterministic<A> {
     fn index(&self, target: Target) -> &[Option<Target>] {
         self.edges(target).unwrap().targets
     }
+}
+
+impl<'a, A: Alphabet> Index<A> for Edges<'a, A> {
+    type Output = Option<Target>;
+
+    fn index(&self, ch: A) -> &Option<Target> {
+        let idx = edge_unwrap(self.alphabet.binary_search(&ch));
+        &self.targets[idx]
+    }
+}
+
+impl<'a, A: Alphabet> Index<A> for EdgesMut<'a, A> {
+    type Output = Option<Target>;
+
+    fn index(&self, ch: A) -> &Option<Target> {
+        let idx = edge_unwrap(self.alphabet.binary_search(&ch));
+        &self.targets[idx]
+    }
+}
+
+impl<'a, A: Alphabet> IndexMut<A> for EdgesMut<'a, A> {
+    fn index_mut(&mut self, ch: A) -> &mut Option<Target> {
+        edge_unwrap(self.target_mut(ch))
+    }
+}
+
+fn edge_unwrap<T, E>(result: Result<T, E>) -> T where E: std::fmt::Debug {
+    result.expect("Mismatch between deterministic alphabet and character")
 }
 
 impl<'a, A> IntoIterator for Edges<'a, A> {
