@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::Alphabet;
 use super::nfa::Nfa;
 
@@ -14,12 +16,24 @@ pub struct Regex<A: Alphabet> {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Handle(usize);
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Op<A: Alphabet> {
     Epsilon,
     Match(A),
     Star(Handle),
     Or(Handle, Handle),
     Concat(Handle, Handle),
+}
+
+/// Provides access to creating new regex expressions with cached results.
+///
+/// ```
+/// let mut regex = Regex::new();
+/// let cached = regex.cached();
+/// ```
+pub struct Cached<A: Alphabet> {
+    regex: Regex<A>,
+    cache: HashMap<Op<A>, Handle>,
 }
 
 impl<A: Alphabet> Regex<A> {
@@ -58,6 +72,36 @@ impl<A: Alphabet> Regex<A> {
     /// Get a root to the regex.
     pub fn root(&self) -> Option<Handle> {
         self.subs.len().checked_sub(1).map(Handle)
+    }
+
+    pub fn cached(self) -> Cached<A> {
+        Cached {
+            regex: self,
+            // TODO: prefill the hashmap with existing operations?
+            cache: HashMap::new(),
+        }
+    }
+}
+
+impl<A: Alphabet> Cached<A> {
+    pub fn new() -> Self {
+        // TODO: can be faster if `cached` should fill the hashmap.
+        Regex::new().cached()
+    }
+
+    /// Insert a new operation.
+    ///
+    /// Deduplicates same operations to also point to the same handle, so you can not generally
+    /// assert that the returned handle is the new root of the regex.
+    pub fn insert(&mut self, op: Op<A>) -> Handle {
+        let regex = &mut self.regex;
+        self.cache.entry(op)
+            .or_insert_with(|| regex.push(op))
+            .clone()
+    }
+
+    pub fn into_inner(self) -> Regex<A> {
+        self.regex
     }
 }
 

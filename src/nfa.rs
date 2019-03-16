@@ -2,12 +2,12 @@ use std::collections::{BTreeSet, HashSet, HashMap};
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::io::{self, Write};
-use std::iter::{self, Extend, FromIterator};
+use std::iter::{Extend, FromIterator};
 
 use super::{Alphabet, Ensure};
 use super::dfa::Dfa;
 use super::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
-use super::regex::{Regex, Op as RegOp};
+use super::regex::{self, Regex, Op as RegOp};
 
 /// A node handle of an epsilon nfa.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
@@ -37,12 +37,14 @@ struct MultiMap<K: Hash + Eq, V> {
 }
 
 /// Symbol used during transformation to regex.
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 enum EphermalSymbol {
     Start,
     Real(usize),
     End,
 }
+
+type EdgeKey = (EphermalSymbol, EphermalSymbol);
 
 trait InsertNew<T> {
     fn insert_new(&mut self, item: T) -> bool;
@@ -135,12 +137,10 @@ impl<A: Alphabet> Nfa<A> {
     /// => O(|V|³) length, preprocessing not even included (although its
     /// growth factor is smaller).
     pub fn to_regex(&self) -> Regex<A> {
-        let mut regex = Regex::new();
+        let mut cached = Regex::new().cached();
 
         // The epsilon symobl.
-        let eps = regex.push(RegOp::Epsilon);
-        // Map for all characters.
-        let mut alph = HashMap::new();
+        let eps = cached.insert(RegOp::Epsilon);
         // Edge->handle list lut.
         let mut edges = MultiMap::default();
 
@@ -152,22 +152,74 @@ impl<A: Alphabet> Nfa<A> {
 
         for (real, node_edges) in self.edges.iter().enumerate() {
             for &(symbol, Node(target)) in node_edges {
-                let handle = alph.entry(symbol)
-                    .or_insert_with(|| regex.push(RegOp::Match(symbol)));
+                let handle = cached.insert(RegOp::Match(symbol));
                 let key = (Real(real), Real(target));
-                edges.insert(key, *handle)
+                edges.insert(key, handle)
             }
         }
 
         // Remove intermediate nodes one-by-one
-        (0..self.edges.len()).for_each(|_| {
+        (0..self.edges.len()).rev().for_each(|real_to_delete| {
             // 1. Merge phase
-            unimplemented!();
+            edges.inner.values_mut().for_each(|alternatives| 
+                if let Some(first) = alternatives.pop() {
+                    let alt = alternatives.iter().cloned()
+                        .fold(first, |alt1, alt2| 
+                            cached.insert(RegOp::Or(alt1, alt2)));
+                    alternatives.clear();
+                    alternatives.push(alt);
+                });
+
 
             // 2. Removal phase
-            unimplemented!();
+            // 2.1 Separate all edges going to the node.
+            let start_to = edges.inner.remove_entry(&(Start, Real(real_to_delete)));
+            let to = (0..real_to_delete)
+                .map(|from| (Real(from), Real(real_to_delete)))
+                .filter_map(|key| edges.inner.remove_entry(&key))
+                .chain(start_to)
+                .filter_map(Self::get_single)
+                .collect::<Vec<_>>();
+
+            // 2.2 Separate all edges going out from the node.
+            let from_to_end = edges.inner.remove_entry(&(Real(real_to_delete), End));
+            let from = (0..real_to_delete)
+                .map(|to| (Real(real_to_delete), Real(to)))
+                .filter_map(|key| edges.inner.remove_entry(&key))
+                .chain(from_to_end)
+                .filter_map(Self::get_single)
+                .collect::<Vec<_>>();
+
+            // 2.3 Get the self-loop edge if it exists.
+            let self_loop = edges.inner
+                .remove_entry(&(Real(real_to_delete), Real(real_to_delete)))
+                .and_then(|item| Self::get_single(item));
+
+            // ... and turn it into its `star` variant.
+            let self_star = self_loop.map(|(_, handle)| cached.insert(RegOp::Star(handle)));
+
+            // 2.4 Insert new paths for each going through.
+            for ((from_node, _), from_handle) in to.iter().cloned() {
+                for((_, to_node), to_handle) in from.iter().cloned() {
+                    let from_to_handle = if let Some(self_star) = self_star {
+                        let first_half = cached.insert(RegOp::Concat(from_handle, self_star));
+                        cached.insert(RegOp::Concat(first_half, to_handle))
+                    } else {
+                        cached.insert(RegOp::Concat(from_handle, to_handle))
+                    };
+                    edges.insert((from_node, to_node), from_to_handle);
+                }
+            }
         });
 
+        let start_to_end = edges.inner.remove_entry(&(Start, End))
+            .expect("Ephermal start to end node should be the only left");
+        let start_to_end = Self::get_single(start_to_end)
+            .expect("Start to end path must exist").1;
+        assert!(edges.inner.is_empty());
+
+        let regex = cached.into_inner();
+        assert_eq!(Some(start_to_end), regex.root(), "Start to end must be the regex root");
         regex
     }
 
@@ -308,6 +360,12 @@ impl<A: Alphabet> Nfa<A> {
         }
 
         reached
+    }
+
+    fn get_single((key, mut val): (EdgeKey, Vec<regex::Handle>)) 
+        -> Option<(EdgeKey, regex::Handle)> 
+    {
+        val.pop().map(|val| (key, val))
     }
 }
 
