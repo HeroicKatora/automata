@@ -2,11 +2,12 @@ use std::collections::{BTreeSet, HashSet, HashMap};
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::io::{self, Write};
+use std::iter::{self, Extend, FromIterator};
 
 use super::{Alphabet, Ensure};
 use super::dfa::Dfa;
 use super::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
-use super::regex::Regex;
+use super::regex::{Regex, Op as RegOp};
 
 /// A node handle of an epsilon nfa.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
@@ -30,6 +31,18 @@ pub struct Nfa<A: Alphabet> {
 }
 
 pub struct NfaRegex<A: Alphabet>(A);
+
+struct MultiMap<K: Hash + Eq, V> {
+    inner: HashMap<K, Vec<V>>,
+}
+
+/// Symbol used during transformation to regex.
+#[derive(PartialEq, Eq, Hash)]
+enum EphermalSymbol {
+    Start,
+    Real(usize),
+    End,
+}
 
 trait InsertNew<T> {
     fn insert_new(&mut self, item: T) -> bool;
@@ -121,8 +134,41 @@ impl<A: Alphabet> Nfa<A> {
     ///
     /// => O(|V|³) length, preprocessing not even included (although its
     /// growth factor is smaller).
-    pub fn to_regex(self) -> Regex<A> {
-        unimplemented!()
+    pub fn to_regex(&self) -> Regex<A> {
+        let mut regex = Regex::new();
+
+        // The epsilon symobl.
+        let eps = regex.push(RegOp::Epsilon);
+        // Map for all characters.
+        let mut alph = HashMap::new();
+        // Edge->handle list lut.
+        let mut edges = MultiMap::default();
+
+        use self::EphermalSymbol::{Start, Real, End};
+
+        edges.insert((Start, Real(0)), eps);
+        self.finals.iter().for_each(|&Node(real)| 
+            edges.insert((Real(real), End), eps));
+
+        for (real, node_edges) in self.edges.iter().enumerate() {
+            for &(symbol, Node(target)) in node_edges {
+                let handle = alph.entry(symbol)
+                    .or_insert_with(|| regex.push(RegOp::Match(symbol)));
+                let key = (Real(real), Real(target));
+                edges.insert(key, *handle)
+            }
+        }
+
+        // Remove intermediate nodes one-by-one
+        (0..self.edges.len()).for_each(|_| {
+            // 1. Merge phase
+            unimplemented!();
+
+            // 2. Removal phase
+            unimplemented!();
+        });
+
+        regex
     }
 
     /// Convert to a dfa using the powerset construction.
@@ -288,6 +334,46 @@ impl<A: Alphabet> NfaRegex<A> {
 impl<A: Alphabet> From<Nfa<A>> for NfaRegex<A> {
     fn from(_automaton: Nfa<A>) -> Self {
         unimplemented!()
+    }
+}
+
+impl<K: Hash + Eq, V> MultiMap<K, V> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn insert(&mut self, key: K, value: V) {
+        let mapped = self.inner.entry(key)
+            .or_insert_with(Vec::new);
+        mapped.push(value)
+    }
+}
+
+impl<K: Hash + Eq, V> Default for MultiMap<K, V> {
+    fn default() -> Self {
+        MultiMap {
+            inner: Default::default(),
+        }
+    }
+}
+
+impl<K: Hash + Eq, V> FromIterator<(K, V)> for MultiMap<K, V> {
+    fn from_iter<T>(iter: T) -> Self
+        where T: IntoIterator<Item = (K, V)> 
+    {
+        let mut set = MultiMap::default();
+        iter.into_iter()
+            .for_each(|(key, value)| set.insert(key, value));
+        set
+    }
+}
+
+impl<K: Hash + Eq, V> Extend<(K, V)> for MultiMap<K, V> {
+    fn extend<T>(&mut self, iter: T)
+        where T: IntoIterator<Item = (K, V)> 
+    {
+        iter.into_iter()
+            .for_each(|(key, value)| self.insert(key, value));
     }
 }
 

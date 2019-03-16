@@ -11,9 +11,11 @@ pub struct Regex<A: Alphabet> {
     subs: Vec<Op<A>>,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Handle(usize);
 
 pub enum Op<A: Alphabet> {
+    Epsilon,
     Match(A),
     Star(Handle),
     Or(Handle, Handle),
@@ -21,6 +23,12 @@ pub enum Op<A: Alphabet> {
 }
 
 impl<A: Alphabet> Regex<A> {
+    pub fn new() -> Self {
+        Regex {
+            subs: vec![],
+        }
+    }
+
     /// Idea:
     ///
     /// Is like a regex-labeled nfa with only one final state.
@@ -35,6 +43,7 @@ impl<A: Alphabet> Regex<A> {
     /// inserted operation.
     pub fn push(&mut self, op: Op<A>) -> Handle {
         match op {
+            Op::Epsilon => (),
             Op::Match(_) => (),
             Op::Star(Handle(i)) => assert!(i < self.subs.len()),
             Op::Or(Handle(i), Handle(j)) => assert!(i < self.subs.len() && j < self.subs.len()),
@@ -49,5 +58,11 @@ impl<A: Alphabet> Regex<A> {
     /// Get a root to the regex.
     pub fn root(&self) -> Option<Handle> {
         self.subs.len().checked_sub(1).map(Handle)
+    }
+}
+
+impl<A: Alphabet> Default for Regex<A> {
+    fn default() -> Self {
+        Self::new()
     }
 }
