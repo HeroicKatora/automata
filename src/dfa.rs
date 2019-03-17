@@ -6,7 +6,6 @@ use std::io::{self, Write};
 use crate::{Alphabet, Ensure};
 use crate::deterministic::{Deterministic, Target};
 use crate::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
-use crate::regex::Regex;
 
 /// A node handle.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
@@ -98,10 +97,6 @@ impl<A: Alphabet> Dfa<A> {
         self.finals.contains(&state)
     }
 
-    pub fn into_regex(self) -> Regex<A> {
-        unimplemented!()
-    }
-
     pub fn write_to(&self, output: &mut Write) -> io::Result<()> 
         where for<'a> &'a A: Display
     {
@@ -135,6 +130,8 @@ impl<A: Alphabet> Dfa<A> {
     }
 
     /// Minimize the automata into its language partition.
+    ///
+    /// NOT YET IMPLEMENTED!
     ///
     /// Contrary to NFAs, the resulting automaton is guaranteed to be a minimal
     /// automaton exactly equivalent to the languages minimal DFA.

@@ -1,6 +1,6 @@
 [package]
 name = "automata"
-version = "0.0.3"
+version = "0.0.4"
 authors = ["HeroicKatora <andreas.molzer@tum.de>"]
 
 # All the human facing meta information

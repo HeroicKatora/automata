@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use super::Alphabet;
-use super::nfa::Nfa;
+// use super::nfa::Nfa;
 
 /// Represents regular expressions over some finite alphabet.
 ///
@@ -39,12 +39,16 @@ impl<A: Alphabet> Regex<A> {
         }
     }
 
+    /*
+    /// Convert the regex into an nfa (NOT YET IMPLEMENTED).
+    ///
     /// Idea:
     ///
     /// Is like a regex-labeled nfa with only one final state.
     pub fn into_nfa(self) -> Nfa<A> {
         unimplemented!()
     }
+    */
 
     /// Push a new operation as the regex root.
     ///
@@ -70,16 +74,19 @@ impl<A: Alphabet> Regex<A> {
         self.subs.len().checked_sub(1).map(Handle)
     }
 
+    /// Modify the regex with a cache for same terms.
+    ///
+    /// By using a cache for terms, it is possible to lower the memory requirements of the
+    /// resulting regex through resued subexpressions.
     pub fn cached(self) -> Cached<A> {
         Cached {
             regex: self,
-            // TODO: prefill the hashmap with existing operations?
             cache: HashMap::new(),
         }
     }
 
+    /// Get a string representation of this regex.
     pub fn to_string(&self) -> String {
-
         let mut string = String::new();
         self.push_from_root(self.root().unwrap(), &mut string);
         string
@@ -111,13 +118,12 @@ impl<A: Alphabet> Regex<A> {
 
 impl<A: Alphabet> Cached<A> {
     pub fn new() -> Self {
-        // TODO: can be faster if `cached` should fill the hashmap.
         Regex::new().cached()
     }
 
     /// Insert a new operation.
     ///
-    /// Deduplicates same operations to also point to the same handle, so you can not generally
+    /// Deduplicates same operations to also point to the same handle, so you can **not** generally
     /// assert that the returned handle is the new root of the regex.
     pub fn insert(&mut self, op: Op<A>) -> Handle {
         let regex = &mut self.regex;
@@ -126,12 +132,24 @@ impl<A: Alphabet> Cached<A> {
         *value
     }
 
+    /// Access the inner regex.
     pub fn inner(&self) -> &Regex<A> {
         &self.regex
     }
 
+    /// Turn it into a raw regex again.
     pub fn into_inner(self) -> Regex<A> {
         self.regex
+    }
+
+    /// Fill the cache from all subexpressions in the regex.
+    ///
+    /// The cache would normally only take into account all newly added `Op`s. For modifying an
+    /// existing regex this will fill the cache with all already inserted subexpressions.
+    pub fn fill_cache(&mut self) {
+        for (handle, op) in self.regex.subs.iter().enumerate() {
+            self.cache.insert(*op, Handle(handle));
+        }
     }
 }
 

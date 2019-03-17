@@ -35,18 +35,35 @@ All units are tested, a bit stricter than their interface requirements, by
 automated unit tests. This includes automata construction, language recognition,
 word rejection, and the exporter.
 
+## Features
+
+* Dfa
+  - word membership test
+  - automaton pairing
+* Nfa
+  - word membership (dynamic powerset)
+  - conversion to regex
+  - conversion to dfa
+* Regex
+  - construction & printing over general alphabet
+  - nothing particularly interesting yet
+
 ## TODO
 
 There are more features planned and/or in development
 
-* Regex
 * Converters–all of (`dfa`, `nfa`, `regex`) are equivalent
+  - Dfa -> Nfa
+  - Regex -> Nfa
+  - Regx -> Dfa (directly, no det step)
 * Joins, Compositions, Intersects, Differences, Equivalence checks
-* Minimalization
+* Minimization
+  - Quotienting (Hopcroft)
+  - Dualization, Brzozowski’s algorithm, maybe.
 * Finite-state Transducers–and compositions
   - Join, Pre, Post
   - Membership, Projections
-  - Modeling solutions to linear integer (in-)equalities with finite automata
+  - Presburger arithmetic, Modeling solutions to linear integer (in-)equalities with finite automata
 * Finite length languages
   - Minimization
   - Construction from NFA
