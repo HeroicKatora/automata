@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Write;
 
 use super::Alphabet;
 use super::nfa::Nfa;
@@ -79,6 +80,34 @@ impl<A: Alphabet> Regex<A> {
             regex: self,
             // TODO: prefill the hashmap with existing operations?
             cache: HashMap::new(),
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+
+        let mut string = String::new();
+        self.push_from_root(self.root().unwrap(), &mut string);
+        string
+    }
+
+    fn push_from_root(&self, Handle(root): Handle, string: &mut String) {
+        match self.subs[root] {
+            Op::Epsilon => string.push_str("{e}"),
+            Op::Match(a) => write!(string, "{{{:?}}}", a).unwrap(),
+            Op::Star(sub) => {
+                string.push('(');
+                self.push_from_root(sub, string);
+                string.push_str(")*");
+            },
+            Op::Or(a, b) => {
+                self.push_from_root(a, string);
+                string.push('|');
+                self.push_from_root(b, string);
+            },
+            Op::Concat(a, b) => {
+                self.push_from_root(a, string);
+                self.push_from_root(b, string);
+            },
         }
     }
 }

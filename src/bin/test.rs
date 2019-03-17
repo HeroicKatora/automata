@@ -46,6 +46,7 @@ fn nfa() {
     automaton.write_to(&mut output).unwrap();
     fs::write("./output/nfa.dot", output)
         .expect("Failed to write dfa dot file");
+    eprintln!("As regex: {}", automaton.to_regex().to_string());
 }
 
 // Try to run `dot` for all files to convert to png, optionally.
