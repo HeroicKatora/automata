@@ -200,7 +200,7 @@ impl<A: Alphabet> Nfa<A> {
             // 2.3 Get the self-loop edge if it exists.
             let self_loop = edges.inner
                 .remove_entry(&(Real(real_to_delete), Real(real_to_delete)))
-                .and_then(|item| Self::get_single(item));
+                .and_then(Self::get_single);
 
             // ... and turn it into its `star` variant.
             let self_star = self_loop.map(|(_, handle)| cached.insert(RegOp::Star(handle)));
@@ -234,7 +234,7 @@ impl<A: Alphabet> Nfa<A> {
     ///
     /// Since the alphabet can not be deduced purely from transitions, `alphabet_extension`
     /// provides a way to indicate additional symbols.
-    pub fn to_dfa<I: IntoIterator<Item=A>>(self, alphabet_extension: I) -> Dfa<A> {
+    pub fn into_dfa<I: IntoIterator<Item=A>>(self, alphabet_extension: I) -> Dfa<A> {
         // The epsilon transition closure of reachable nodes.
         let initial_state: BTreeSet<_> = self.epsilon_reach(Node(0));
         let alphabet = self.edges.iter()
@@ -250,7 +250,7 @@ impl<A: Alphabet> Nfa<A> {
         let mut finals = Vec::new();
 
         while let Some(next) = pending.pop() {
-            let from = state_map.get(&next).unwrap().clone();
+            let from = state_map[&next];
             for ch in alphabet.iter().cloned() {
                 let basic = next.iter().cloned()
                     .flat_map(|Node(idx)| self.edges[idx].iter()
@@ -260,6 +260,7 @@ impl<A: Alphabet> Nfa<A> {
                 let closure = basic.into_iter()
                     .map(|state| self.epsilon_reach(state))
                     .fold(BTreeSet::new(), |left, right| left.union(&right).cloned().collect());
+
                 let is_final = closure.iter().any(|st| self.finals.contains(st));
                 let new_index = state_map.len();
 
@@ -330,12 +331,10 @@ impl<A: Alphabet> Nfa<A> {
     /// Consider converting the nfa to an equivalent dfa before querying, especially when
     /// performing multiple successive queries.
     pub fn contains<I: IntoIterator<Item=A>>(&self, sequence: I) -> bool {
-        let mut sequence = sequence.into_iter();
-
         // The epsilon transition closure of reachable nodes.
         let mut states: HashSet<_> = self.epsilon_reach(Node(0));
 
-        while let Some(ch) = sequence.next() {
+        for ch in sequence {
             let next = states.into_iter()
                 .flat_map(|Node(idx)| self.edges[idx].iter()
                       .filter(|edge| edge.0 == ch)
@@ -391,7 +390,7 @@ impl<A: Alphabet> NfaRegex<A> {
     /// 0 ––a+b–> 1   >  0 |    1
     ///                    \–b–/
     /// ```
-    pub fn to_nfa(self) -> Nfa<A> {
+    pub fn into_nfa(self) -> Nfa<A> {
         unimplemented!()
     }
 }
@@ -403,10 +402,6 @@ impl<A: Alphabet> From<Nfa<A>> for NfaRegex<A> {
 }
 
 impl<K: Hash + Eq, V> MultiMap<K, V> {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn insert(&mut self, key: K, value: V) {
         let mapped = self.inner.entry(key)
             .or_insert_with(Vec::new);
@@ -508,7 +503,7 @@ mod tests {
             (1, Some('0'), 0),
         ], vec![1]);
 
-        let automaton = automaton.to_dfa(vec!['2']);
+        let automaton = automaton.into_dfa(vec!['2']);
 
         assert!( automaton.contains("".chars()));
         assert!( automaton.contains("1".chars()));

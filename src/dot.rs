@@ -18,6 +18,9 @@ pub struct Node {
     /// Final/Accepting states in automaton are marked by two peripheral lines. The default value
     /// for this attribute is 1.
     pub peripheries: Option<usize>,
+
+    /// Use `.. Node::Default()` to make the structs.
+    pub _non_exhaustive: (),
 }
 
 /// Optionally contains the possible edge attributes.
@@ -25,6 +28,9 @@ pub struct Node {
 pub struct Edge {
     /// A label to appear, can be html or an escaped string.
     pub label: Option<Id>,
+
+    /// Use `.. Edge::Default()` to make the structs.
+    pub _non_exhaustive: (),
 }
 
 /// Writes dot files.
@@ -92,9 +98,9 @@ impl<W: Write> GraphWriter<W> {
     /// Begins writing a graph with the given parameters.
     pub fn new(mut inner: W, family: Family, name: Option<Id>) -> io::Result<Self> {
         if let Some(name) = name {
-            write!(&mut inner, "{} {} {{\n", family.name(), name)?;
+            writeln!(&mut inner, "{} {} {{", family.name(), name)?;
         } else {
-            write!(&mut inner, "{} {{\n", family.name())?;
+            writeln!(&mut inner, "{} {{", family.name())?;
         }
 
         Ok(GraphWriter {
@@ -132,14 +138,14 @@ impl<W: Write> GraphWriter<W> {
 
         write!(fmt, "\t{} {} {} ", begin.into(), self.edgeop.edgeop(), end.into())?;
 
-        while let Some(next) = iter.next() {
+        for next in iter {
             write!(fmt, "{} {} ", self.edgeop.edgeop(), next.into())?;
         }
 
         if let Some(options) = options {
-            write!(fmt, "[{}];\n", options)
+            writeln!(fmt, "[{}];", options)
         } else {
-            write!(fmt, ";\n")
+            writeln!(fmt, ";")
         }
     }
 
@@ -150,9 +156,9 @@ impl<W: Write> GraphWriter<W> {
         write!(fmt, "\t{} ", id)?;
 
         if let Some(options) = node {
-            write!(fmt, "[{}];\n", options)
+            writeln!(fmt, "[{}];", options)
         } else {
-            write!(fmt, ";\n")
+            writeln!(fmt, ";")
         }
     }
 
@@ -265,12 +271,12 @@ impl IdEnum {
             // `String::insert` to add single characters but doing so would be O(n·m) where n is
             // the length of the string and m is the number of '"' chars. In comparison, this
             // operation is O(n) since we only move each character at most once.
-            unsafe{
+            unsafe {
                 let vec = string.as_mut_vec();
                 let mut num_inserts = quote_count;
 
                 assert!(num_inserts > 0, "contains at least one quote");
-                assert!(vec.len() > 0, "contains at least one quote");
+                assert!(!vec.is_empty(), "contains at least one quote");
                 let mut text_end = vec.len();
 
                 // Controlled panic
@@ -378,7 +384,7 @@ impl fmt::Display for Node {
             write!(f, "{}={},", Id::LABEL, label)?;
         }
 
-        if let Some(peripheries) = self.peripheries.clone() {
+        if let Some(peripheries) = self.peripheries {
             write!(f, "{}={},", Id::PERIPHERIES, peripheries)?;
         }
 

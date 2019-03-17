@@ -37,13 +37,13 @@ impl<A: Alphabet> Dfa<A> {
         let mut states = HashSet::new();
         states.insert(0);
 
-        for (from, a, to) in edge_iter.into_iter() {
+        for (from, a, to) in edge_iter {
             edges.ensure_default(from + 1);
             edges.ensure_default(to + 1);
             check.ensure_default(from + 1);
             check.ensure_default(to + 1);
             
-            edges[from].push((a.clone(), to));
+            edges[from].push((a, to));
             check[from].insert(a);
             states.insert(from);
             states.insert(to);
@@ -61,7 +61,7 @@ impl<A: Alphabet> Dfa<A> {
             }
         }
 
-        let mut graph = Deterministic::new(alphabet.unwrap().into_iter());
+        let mut graph = Deterministic::new(alphabet.unwrap());
 
         for edge_list in edges.iter_mut() {
             // There are never any duplicates and now the indices correspond to
@@ -86,10 +86,9 @@ impl<A: Alphabet> Dfa<A> {
 
     /// Checks if the input word is contained in the language.
     pub fn contains<I: IntoIterator<Item=A>>(&self, sequence: I) -> bool {
-        let mut sequence = sequence.into_iter();
         let mut state = Target::ZERO;
 
-        while let Some(ch) = sequence.next() {
+        for ch in sequence {
             let next = self.graph
                 .edges(state).unwrap()
                 [ch].unwrap();
@@ -99,7 +98,7 @@ impl<A: Alphabet> Dfa<A> {
         self.finals.contains(&state)
     }
 
-    pub fn to_regex(self) -> Regex<A> {
+    pub fn into_regex(self) -> Regex<A> {
         unimplemented!()
     }
 

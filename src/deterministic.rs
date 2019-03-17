@@ -159,7 +159,7 @@ impl<A: Alphabet> Deterministic<A> {
         let idx = target.index();
         let count = self.char_count();
         if idx >= self.next_id {
-            return None
+            None
         } else {
             // None of this overflows.
             let start = idx.checked_mul(count).unwrap();
@@ -213,7 +213,7 @@ impl<A: Alphabet> Edges<'_, A> {
     #[allow(unused)]
     pub fn target(&self, ch: A) -> Result<Option<Target>, ()> {
         self.alphabet.binary_search(&ch).map_err(|_| ())
-            .map(|idx| self.targets[idx].clone())
+            .map(|idx| self.targets[idx])
     }
 }
 
@@ -221,7 +221,7 @@ impl<A: Alphabet> EdgesMut<'_, A> {
     #[allow(unused)]
     pub fn target(&self, ch: A) -> Result<Option<Target>, ()> {
         self.alphabet.binary_search(&ch).map_err(|_| ())
-            .map(|idx| self.targets[idx].clone())
+            .map(|idx| self.targets[idx])
     }
 
     pub fn target_mut(&mut self, ch: A) -> Result<&mut Option<Target>, ()> {

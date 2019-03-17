@@ -27,11 +27,6 @@ pub enum Op<A: Alphabet> {
 }
 
 /// Provides access to creating new regex expressions with cached results.
-///
-/// ```
-/// let mut regex = Regex::new();
-/// let cached = regex.cached();
-/// ```
 pub struct Cached<A: Alphabet> {
     regex: Regex<A>,
     cache: HashMap<Op<A>, Handle>,
@@ -47,7 +42,7 @@ impl<A: Alphabet> Regex<A> {
     /// Idea:
     ///
     /// Is like a regex-labeled nfa with only one final state.
-    pub fn to_nfa(self) -> Nfa<A> {
+    pub fn into_nfa(self) -> Nfa<A> {
         unimplemented!()
     }
 
@@ -126,9 +121,9 @@ impl<A: Alphabet> Cached<A> {
     /// assert that the returned handle is the new root of the regex.
     pub fn insert(&mut self, op: Op<A>) -> Handle {
         let regex = &mut self.regex;
-        self.cache.entry(op)
-            .or_insert_with(|| regex.push(op))
-            .clone()
+        let value = self.cache.entry(op)
+            .or_insert_with(|| regex.push(op));
+        *value
     }
 
     pub fn inner(&self) -> &Regex<A> {
@@ -141,6 +136,12 @@ impl<A: Alphabet> Cached<A> {
 }
 
 impl<A: Alphabet> Default for Regex<A> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<A: Alphabet> Default for Cached<A> {
     fn default() -> Self {
         Self::new()
     }
