@@ -100,9 +100,11 @@ impl<A: Alphabet> Regex<A> {
                 string.push_str(")*");
             },
             Op::Or(a, b) => {
+                string.push('(');
                 self.push_from_root(a, string);
                 string.push('|');
                 self.push_from_root(b, string);
+                string.push(')');
             },
             Op::Concat(a, b) => {
                 self.push_from_root(a, string);
@@ -127,6 +129,10 @@ impl<A: Alphabet> Cached<A> {
         self.cache.entry(op)
             .or_insert_with(|| regex.push(op))
             .clone()
+    }
+
+    pub fn inner(&self) -> &Regex<A> {
+        &self.regex
     }
 
     pub fn into_inner(self) -> Regex<A> {

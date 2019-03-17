@@ -154,7 +154,14 @@ impl<A: Alphabet> Nfa<A> {
             for &(symbol, Node(target)) in node_edges {
                 let handle = cached.insert(RegOp::Match(symbol));
                 let key = (Real(real), Real(target));
-                edges.insert(key, handle)
+                edges.insert(key, handle);
+            }
+        }
+
+        for (real, node_edges) in self.epsilons.iter().enumerate() {
+            for &Node(target) in node_edges {
+                let key = (Real(real), Real(target));
+                edges.insert(key, eps);
             }
         }
 
