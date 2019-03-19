@@ -1,4 +1,5 @@
 mod deterministic;
+mod nondeterministic;
 
 pub mod dfa;
 pub mod dot;
