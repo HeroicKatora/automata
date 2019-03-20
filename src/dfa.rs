@@ -6,6 +6,7 @@ use std::io::{self, Write};
 use crate::{Alphabet, Ensure};
 use crate::deterministic::{Deterministic, Target};
 use crate::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
+use crate::nfa::Nfa;
 
 /// A node handle.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
@@ -142,7 +143,9 @@ impl<A: Alphabet> Dfa<A> {
     /// Pairs two automata with a given binary boolean operation
     ///
     /// If there are no final states, returns `None`.
-    pub fn pair(&self, rhs: &Self, decider: &Fn(bool, bool) -> bool) -> Option<Self> {
+    pub fn pair<F>(&self, rhs: &Self, decider: F) -> Option<Self>
+        where F: Fn(bool, bool) -> bool
+    {
         assert!(self.alphabet() == rhs.alphabet(), "Automata alphabets differ");
 
         let mut assigned = HashMap::new();
@@ -202,7 +205,9 @@ impl<A: Alphabet> Dfa<A> {
     /// decider function. A DFA is universal iff all of its reachable states are 
     /// final, which is the same as checking that in the complement all reachable
     /// states are non-final.
-    pub fn pair_empty(&self, rhs: &Self, decider: &Fn(bool, bool) -> bool) -> bool {
+    pub fn pair_empty<F>(&self, rhs: &Self, decider: F) -> bool
+        where F: Fn(bool, bool) -> bool
+    {
         assert!(self.alphabet() == rhs.alphabet(), "Automata alphabets differ");
 
         let mut assigned = HashSet::new();
@@ -229,6 +234,20 @@ impl<A: Alphabet> Dfa<A> {
         }
 
         true
+    }
+
+    /// Get an equivalent nfa.
+    pub fn to_nfa(&self) -> Nfa<A> {
+        unimplemented!()
+    }
+
+
+    /// Turn this into an equivalent nfa.
+    ///
+    /// Compared to `to_nfa` this may be able to reuse some of the allocations and might be more
+    /// efficient.
+    pub fn into_nfa(self) -> Nfa<A> {
+        unimplemented!()
     }
 }
 
