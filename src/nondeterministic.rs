@@ -38,8 +38,14 @@ pub struct Builder<A> {
     epsilons: Vec<Vec<usize>>,
 }
 
+pub struct Edges<'a, A> {
+    characters: &'a [A],
+    edges: &'a [Edge],
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct Edge {
-    character: Label,
+    label: Label,
     target: usize,
 }
 
@@ -49,6 +55,20 @@ struct Character(NonZeroUsize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct Label(Option<Character>);
+
+impl<A: Alphabet> NonDeterministic<A> {
+    pub fn builder() -> Builder<A> {
+        Builder::default()
+    }
+
+    pub fn edges(&self, node: usize) -> Option<Edges<A>> {
+        let range = self.ranges.get(node)?;
+        Some(Edges {
+            characters: self.characters.as_slice(),
+            edges: self.edges.get(range.clone()).unwrap(),
+        })
+    }
+}
 
 impl<A: Alphabet> Builder<A> {
     pub fn node(&mut self) -> usize {
@@ -90,17 +110,16 @@ impl<A: Alphabet> Builder<A> {
             let end = start + node_epsilons.len() + node_edges.len();
 
             edges.extend(node_epsilons.iter().map(|&target| Edge {
-                character: Label::EPSILON,
+                label: Label::EPSILON,
                 target,
             }));
             edges.extend(node_edges.iter().map(|(character, target)| Edge {
-                character: character_label[character],
+                label: character_label[character],
                 target: *target,
             }));
 
+            edges[start..end].sort();
             ranges.push(start..end);
-
-            unimplemented!("Sort the range by character")
         });
 
         NonDeterministic {
@@ -138,6 +157,18 @@ impl<A: Alphabet> Builder<A> {
     }
 }
 
+impl<'a, A: Alphabet> Iterator for Edges<'a, A> {
+    type Item = (Option<&'a A>, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (edge, tail) = self.edges.split_first()?;
+        self.edges = tail;
+        let character = edge.label.index()
+            .map(|idx| &self.characters[idx]);
+        Some((character, edge.target))
+    }
+}
+
 impl Character {
     pub fn new(index: usize) -> Self {
         Character(NonZeroUsize::new(index + 1).unwrap())
@@ -153,5 +184,20 @@ impl Label {
 
     pub fn character(index: usize) -> Self {
         Label(Some(Character::new(index)))
+    }
+
+    pub fn index(self) -> Option<usize> {
+        self.0.map(Character::index)
+    }
+}
+
+impl<A: Alphabet> Default for Builder<A> {
+    fn default() -> Self {
+        Builder {
+            characters: Vec::new(),
+            ordered: Vec::new(),
+            edges: Vec::new(),
+            epsilons: Vec::new(),
+        }
     }
 }
