@@ -22,16 +22,23 @@ pub trait Alphabet: Hash + Eq + Debug + Clone + Copy + Ord { }
 impl<T> Alphabet for T where T: Hash + Eq + Debug + Clone + Copy + Ord { }
 
 /// Ensure the length of a container as if by resize(max(len, n)).
-trait Ensure<T: Clone> {
-    fn ensure(&mut self, n: usize, item: T);
+trait Ensure<T> {
+    fn ensure_with<F>(&mut self, n: usize, new: F) where F: FnMut() -> T;
+
+    fn ensure(&mut self, n: usize, item: T) where T: Clone {
+        self.ensure_with(n, || item.clone())
+    }
+
     fn ensure_default(&mut self, n: usize) where T: Default {
-        self.ensure(n, T::default());
+        self.ensure_with(n, T::default);
     }
 }
 
 impl<T: Clone> Ensure<T> for Vec<T> {
-    fn ensure(&mut self, n: usize, item: T) {
+    fn ensure_with<F>(&mut self, n: usize, creator: F) 
+        where F: FnMut() -> T
+    {
         let new_len = self.len().max(n);
-        self.resize(new_len, item);
+        self.resize_with(new_len, creator);
     }
 }

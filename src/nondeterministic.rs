@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::ops::Range;
 
-use super::Alphabet;
+use super::{Alphabet, Ensure};
 
 pub struct NonDeterministic<A> {
     /// All visited characters, ordered.
@@ -38,9 +38,21 @@ pub struct Builder<A> {
     epsilons: Vec<Vec<usize>>,
 }
 
+/// Iterator over the outgoing edges of a node.
+///
+/// Should provides other access functions to facilitate traversing the graph or restricting to a
+/// specific edge character label.
+#[derive(Clone)]
 pub struct Edges<'a, A> {
-    characters: &'a [A],
+    graph: &'a NonDeterministic<A>,
     edges: &'a [Edge],
+}
+
+/// Iterator over all graph nodes.
+#[derive(Clone)]
+pub struct Nodes<'a, A> {
+    node_id: usize,
+    graph: &'a NonDeterministic<A>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -64,9 +76,34 @@ impl<A: Alphabet> NonDeterministic<A> {
     pub fn edges(&self, node: usize) -> Option<Edges<A>> {
         let range = self.ranges.get(node)?;
         Some(Edges {
-            characters: self.characters.as_slice(),
+            graph: self,
             edges: self.edges.get(range.clone()).unwrap(),
         })
+    }
+
+    pub fn nodes(&self) -> Nodes<A> {
+        Nodes { 
+            node_id: 0,
+            graph: self
+        }
+    }
+
+    pub fn alphabet(&self) -> &[A] {
+        self.characters.as_slice()
+    }
+
+    fn label(&self, ch: Option<&A>) -> Option<Label> {
+        match ch {
+            Some(ch) => self.characters
+                .binary_search(ch)
+                .map(Label::character)
+                .ok(),
+            None => Some(Label::EPSILON),
+        }
+    }
+
+    fn unlabel(&self, label: Label) -> Option<&A> {
+        label.index().map(|idx| &self.characters[idx])
     }
 }
 
@@ -90,6 +127,9 @@ impl<A: Alphabet> Builder<A> {
         }
     }
 
+    /// Build a finalized graph.
+    ///
+    /// This step optimizes the data structure for querying of graph edges instead of insertion.
     pub fn finish(&self) -> NonDeterministic<A> {
         // Map for current to actually ordered character mapping.
         let character_label = self.ordered
@@ -150,22 +190,8 @@ impl<A: Alphabet> Builder<A> {
     }
 
     fn ensure_nodes(&mut self, node: usize) {
-        if node >= self.edges.len() {
-            self.edges.resize_with(node, Vec::new);
-            self.epsilons.resize_with(node, Vec::new);
-        }
-    }
-}
-
-impl<'a, A: Alphabet> Iterator for Edges<'a, A> {
-    type Item = (Option<&'a A>, usize);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let (edge, tail) = self.edges.split_first()?;
-        self.edges = tail;
-        let character = edge.label.index()
-            .map(|idx| &self.characters[idx]);
-        Some((character, edge.target))
+        self.edges.ensure_with(node + 1, Vec::new);
+        self.epsilons.ensure_with(node + 1, Vec::new);
     }
 }
 
@@ -188,6 +214,71 @@ impl Label {
 
     pub fn index(self) -> Option<usize> {
         self.0.map(Character::index)
+    }
+}
+
+impl<'a, A: Alphabet> Edges<'a, A> {
+    /// Only iterate over edges labeled with the character.
+    pub fn restrict_to(&mut self, character: Option<&A>) {
+        let label = match self.graph.label(character) {
+            Some(label) => label,
+            None => return self.edges = &self.edges[0..0],
+        };
+        let begin = self.edges.iter()
+            .position(|edge| edge.label >= label)
+            .unwrap_or_else(|| self.edges.len());
+        let end = self.edges.iter()
+            .position(|edge| edge.label > label)
+            .unwrap_or_else(|| self.edges.len());
+        self.edges = &self.edges[begin..end];
+    }
+
+    pub fn targets(self) -> impl Iterator<Item=usize> + 'a {
+        self.map(|(_, target)| target)
+    }
+}
+
+impl<'a, A: Alphabet> Nodes<'a, A> {
+    fn todo(&self) -> usize {
+        let len = self.graph.edges.len();
+        len - self.node_id
+    }
+}
+
+impl<'a, A: Alphabet> Iterator for Edges<'a, A> {
+    type Item = (Option<&'a A>, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (edge, tail) = self.edges.split_first()?;
+        self.edges = tail;
+        let character = self.graph.unlabel(edge.label);
+        Some((character, edge.target))
+    }
+}
+
+impl<'a, A: Alphabet> Iterator for Nodes<'a, A> {
+    type Item = (usize, Edges<'a, A>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let id = self.node_id;
+        let edges = self.graph.edges(id)?;
+        self.node_id += 1;
+        Some((id, edges))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let todo = self.todo();
+        (todo, Some(todo))
+    }
+
+    fn count(self) -> usize {
+        self.todo()
+    }
+}
+
+impl<'a, A: Alphabet> ExactSizeIterator for Nodes<'a, A> {
+    fn len(&self) -> usize {
+        self.todo()
     }
 }
 

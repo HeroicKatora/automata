@@ -8,6 +8,7 @@ use super::{Alphabet, Ensure};
 use super::dfa::Dfa;
 use super::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
 use super::regex::{self, Regex, Op as RegOp};
+use super::nondeterministic::NonDeterministic;
 
 /// A node handle of an epsilon nfa.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
@@ -19,13 +20,7 @@ pub struct RegexNode(pub usize);
 
 /// A non-deterministic automaton with epsilon transitions.
 pub struct Nfa<A: Alphabet> {
-    /// Edges like a dfa but may contain duplicate entries for first component.
-    edges: Vec<Vec<(A, Node)>>,
-
-    /// Stores epsilon transitions separately.
-    ///
-    /// This makes it easier to find the epsilon reachability graph.
-    epsilons: Vec<Vec<Node>>,
+    graph: NonDeterministic<A>,
 
     finals: HashSet<Node>,
 }
@@ -64,27 +59,10 @@ impl<A: Alphabet> Nfa<A> {
         V: IntoIterator<Item=usize>, 
         A: Clone + Debug,
     {
-        let mut edges = vec![Vec::new()];
-        let mut epsilons = vec![Vec::new()];
+        let mut builder = NonDeterministic::builder();
 
-        edge_iter.into_iter().for_each(|edge| match edge {
-            (from, Some(label), to) => {
-                edges.ensure_default(from + 1);
-                edges.ensure_default(to + 1);
-                epsilons.ensure_default(from + 1);
-                epsilons.ensure_default(to + 1);
-
-                edges[from].push((label, Node(to)));
-            },
-            (from, None, to) => {
-                edges.ensure_default(from + 1);
-                edges.ensure_default(to + 1);
-                epsilons.ensure_default(from + 1);
-                epsilons.ensure_default(to + 1);
-
-                epsilons[from].push(Node(to));
-            }
-        });
+        edge_iter.into_iter().for_each(
+            |edge| builder.insert(edge.0, edge.1.as_ref(), edge.2));
 
         let finals = finals
             .into_iter()
@@ -92,8 +70,7 @@ impl<A: Alphabet> Nfa<A> {
             .collect();
 
         Nfa {
-            edges,
-            epsilons,
+            graph: builder.finish(),
             finals,
         }
     }
@@ -150,23 +127,19 @@ impl<A: Alphabet> Nfa<A> {
         self.finals.iter().for_each(|&Node(real)| 
             edges.insert((Real(real), End), eps));
 
-        for (real, node_edges) in self.edges.iter().enumerate() {
-            for &(symbol, Node(target)) in node_edges {
-                let handle = cached.insert(RegOp::Match(symbol));
+        for (real, node_edges) in self.graph.nodes() {
+            for (symbol, target) in node_edges {
                 let key = (Real(real), Real(target));
+                let handle = match symbol {
+                    Some(symbol) => cached.insert(RegOp::Match(*symbol)),
+                    None => eps,
+                };
                 edges.insert(key, handle);
             }
         }
 
-        for (real, node_edges) in self.epsilons.iter().enumerate() {
-            for &Node(target) in node_edges {
-                let key = (Real(real), Real(target));
-                edges.insert(key, eps);
-            }
-        }
-
         // Remove intermediate nodes one-by-one
-        (0..self.edges.len()).rev().for_each(|real_to_delete| {
+        (0..self.graph.nodes().len()).rev().for_each(|real_to_delete| {
             // 1. Merge phase
             edges.inner.values_mut().for_each(|alternatives| 
                 if let Some(first) = alternatives.pop() {
@@ -237,12 +210,10 @@ impl<A: Alphabet> Nfa<A> {
     pub fn into_dfa<I: IntoIterator<Item=A>>(self, alphabet_extension: I) -> Dfa<A> {
         // The epsilon transition closure of reachable nodes.
         let initial_state: BTreeSet<_> = self.epsilon_reach(Node(0));
-        let alphabet = self.edges.iter()
-            .flat_map(|edges| edges.iter().map(|edge| edge.0))
-            .chain(alphabet_extension.into_iter())
-            .collect::<HashSet<A>>()
-            .into_iter()
-            .collect::<Vec<A>>();
+        let alphabet = self.graph.alphabet()
+            .iter().cloned()
+            .chain(alphabet_extension)
+            .collect::<Vec<_>>();
 
         let mut state_map = vec![(initial_state.clone(), 0)].into_iter().collect::<HashMap<_, _>>();
         let mut pending = vec![initial_state];
@@ -253,12 +224,15 @@ impl<A: Alphabet> Nfa<A> {
             let from = state_map[&next];
             for ch in alphabet.iter().cloned() {
                 let basic = next.iter().cloned()
-                    .flat_map(|Node(idx)| self.edges[idx].iter()
-                        .filter(|edge| edge.0 == ch)
-                        .map(|edge| edge.1))
+                    .flat_map(|Node(idx)| {
+                        let mut edges = self.graph.edges(idx).unwrap();
+                        edges.restrict_to(Some(&ch));
+                        edges.targets()
+                    })
                     .collect::<HashSet<_>>();
+
                 let closure = basic.into_iter()
-                    .map(|state| self.epsilon_reach(state))
+                    .map(|state| self.epsilon_reach(Node(state)))
                     .fold(BTreeSet::new(), |left, right| left.union(&right).cloned().collect());
 
                 let is_final = closure.iter().any(|st| self.finals.contains(st));
@@ -289,25 +263,19 @@ impl<A: Alphabet> Nfa<A> {
     {
         let mut writer = GraphWriter::new(output, Family::Directed, None)?;
 
-        for (from, edges) in self.edges.iter().enumerate() {
-            for (label, to) in edges.iter() {
+        for (from, edges) in self.graph.nodes() {
+            for (label, to) in edges {
+                let label = match label {
+                    Some(ch) => format!("{}", ch),
+                    None => "ε".into(),
+                };
+
                 let edge = DotEdge { 
-                    label: Some(format!("{}", label).into()),
+                    label: Some(label.into()),
                     .. DotEdge::none()
                 };
 
-                writer.segment([from, to.0].iter().cloned(), Some(edge))?;
-            }
-        }
-
-        for (from, edges) in self.epsilons.iter().enumerate() {
-            for to in edges.iter() {
-                let edge = DotEdge {
-                    label: Some("ε".into()),
-                    .. DotEdge::none()
-                };
-
-                writer.segment([from, to.0].iter().cloned(), Some(edge))?;
+                writer.segment([from, to].iter().cloned(), Some(edge))?;
             }
         }
 
@@ -336,13 +304,17 @@ impl<A: Alphabet> Nfa<A> {
 
         for ch in sequence {
             let next = states.into_iter()
-                .flat_map(|Node(idx)| self.edges[idx].iter()
-                      .filter(|edge| edge.0 == ch)
-                      .map(|edge| edge.1))
+                .flat_map(|Node(idx)| {
+                    let mut edges = self.graph.edges(idx).unwrap();
+                    edges.restrict_to(Some(&ch));
+                    edges.targets()
+                })
                 .collect::<HashSet<_>>();
-            let epsilon_reach = next.iter().cloned()
-                .map(|state| self.epsilon_reach(state))
+
+            let epsilon_reach = next.into_iter()
+                .map(|state| self.epsilon_reach(Node(state)))
                 .fold(HashSet::new(), |left, right| left.union(&right).cloned().collect());
+
             states = epsilon_reach;
         }
 
@@ -359,10 +331,12 @@ impl<A: Alphabet> Nfa<A> {
         reached.insert_new(start);
         todo.push(start);
 
-        while let Some(next) = todo.pop() {
-            self.epsilons[next.0].iter()
-                .filter(|&&target| reached.insert_new(target))
-                .for_each(|&target| todo.push(target));
+        while let Some(Node(next)) = todo.pop() {
+            let mut edges = self.graph.edges(next).unwrap();
+            edges.restrict_to(None);
+            edges.map(|(_, target)| Node(target))
+                .filter(|&target| reached.insert_new(target))
+                .for_each(|target| todo.push(target));
         }
 
         reached
