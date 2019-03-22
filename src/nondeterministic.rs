@@ -108,13 +108,6 @@ impl<A: Alphabet> NonDeterministic<A> {
 }
 
 impl<A: Alphabet> Builder<A> {
-    pub fn node(&mut self) -> usize {
-        let id = self.edges.len();
-        self.edges.push(vec![]);
-        self.epsilons.push(vec![]);
-        id
-    }
-
     /// Insert a new edge, guarded by the specified character.
     pub fn insert(&mut self, from: usize, character: Option<&A>, to: usize) {
         self.ensure_nodes(from);

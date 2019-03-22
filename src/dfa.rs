@@ -356,10 +356,10 @@ mod tests {
             (2, '.', 0),
         ], vec![0]);
 
-        assert!(!automaton_even.pair_empty(&automaton_3, &|lhs, rhs| lhs & rhs));
-        assert!(!automaton_even.pair_empty(&automaton_3, &|lhs, rhs| lhs | rhs));
+        assert!(!automaton_even.pair_empty(&automaton_3, |lhs, rhs| lhs & rhs));
+        assert!(!automaton_even.pair_empty(&automaton_3, |lhs, rhs| lhs | rhs));
 
-        assert!( automaton_even.pair_empty(&automaton_odd, &|lhs, rhs| lhs & rhs));
-        assert!( automaton_even.pair_empty(&automaton_odd, &|lhs, rhs| !(lhs | rhs)));
+        assert!( automaton_even.pair_empty(&automaton_odd, |lhs, rhs| lhs & rhs));
+        assert!( automaton_even.pair_empty(&automaton_odd, |lhs, rhs| !(lhs | rhs)));
     }
 }

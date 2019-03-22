@@ -4,7 +4,7 @@ use std::hash::Hash;
 use std::io::{self, Write};
 use std::iter::{Extend, FromIterator};
 
-use super::{Alphabet, Ensure};
+use super::Alphabet;
 use super::dfa::Dfa;
 use super::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
 use super::regex::{self, Regex, Op as RegOp};
@@ -442,10 +442,10 @@ mod tests {
         let output = String::from_utf8(output)
             .expect("output should be utf8 encoded");
         assert_eq!(output, r#"digraph {
+	0 -> 1 [label="ε",];
 	0 -> 0 [label=0,];
 	0 -> 1 [label=1,];
 	1 -> 0 [label=0,];
-	0 -> 1 [label="ε",];
 	1 [peripheries=2,];
 }
 "#);
