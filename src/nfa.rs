@@ -75,6 +75,13 @@ impl<A: Alphabet> Nfa<A> {
         }
     }
 
+    pub(crate) fn from_nondeterministic(graph: NonDeterministic<A>, finals: HashSet<Node>) -> Self {
+        Nfa {
+            graph,
+            finals,
+        }
+    }
+
     /// First collapse all output states (compress the automaton).
     ///     This is done by adding new initial/final state and
     ///     epsilon transition to/from the previous states.

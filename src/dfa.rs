@@ -6,7 +6,8 @@ use std::io::{self, Write};
 use crate::{Alphabet, Ensure};
 use crate::deterministic::{Deterministic, Target};
 use crate::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
-use crate::nfa::Nfa;
+use crate::nfa::{self, Nfa};
+use crate::regex::Regex;
 
 /// A node handle.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
@@ -238,7 +239,12 @@ impl<A: Alphabet> Dfa<A> {
 
     /// Get an equivalent nfa.
     pub fn to_nfa(&self) -> Nfa<A> {
-        unimplemented!()
+        let graph = (&self.graph).into();
+        let finals = self.finals.iter().cloned()
+            .map(Target::index)
+            .map(nfa::Node)
+            .collect();
+        Nfa::from_nondeterministic(graph, finals)
     }
 
 
@@ -247,7 +253,14 @@ impl<A: Alphabet> Dfa<A> {
     /// Compared to `to_nfa` this may be able to reuse some of the allocations and might be more
     /// efficient.
     pub fn into_nfa(self) -> Nfa<A> {
-        unimplemented!()
+        // FIXME: maybe nondeterministic can spare a copy.
+        self.to_nfa()
+    }
+
+    /// Get an equivalent regex.
+    pub fn to_regex(&self) -> Regex<A> {
+        // This is not the best but still pretty efficient.
+        self.to_nfa().to_regex()
     }
 }
 

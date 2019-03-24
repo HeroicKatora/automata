@@ -3,6 +3,7 @@ use std::num::NonZeroUsize;
 use std::ops::Range;
 
 use super::{Alphabet, Ensure};
+use super::deterministic::{self, Deterministic};
 
 pub struct NonDeterministic<A> {
     /// All visited characters, ordered.
@@ -90,6 +91,36 @@ impl<A: Alphabet> NonDeterministic<A> {
 
     pub fn alphabet(&self) -> &[A] {
         self.characters.as_slice()
+    }
+
+    pub fn from_deterministic(det: &Deterministic<A>) -> Self {
+        // alphabet is also sorted.
+        let characters = det.alphabet().to_vec();
+        let nodes = det.node_count();
+        // Assume densely packed.
+        let mut edges = Vec::with_capacity(nodes*characters.len());
+        let mut ranges = Vec::with_capacity(nodes);
+
+        for node in 0..nodes {
+            let target = deterministic::Target::new(node).unwrap();
+            let outgoing = &det[target];
+            let outedges = outgoing.iter()
+                .enumerate()
+                .filter_map(|(id, edge)| edge.map(|target| Edge {
+                    label: Label::character(id),
+                    target: target.index(),
+                }));
+            let begin = edges.len();
+            edges.extend(outedges);
+            let end = edges.len();
+            ranges.push(begin..end);
+        }
+
+        NonDeterministic {
+            characters,
+            edges,
+            ranges,
+        }
     }
 
     fn label(&self, ch: Option<&A>) -> Option<Label> {
@@ -283,5 +314,17 @@ impl<A: Alphabet> Default for Builder<A> {
             edges: Vec::new(),
             epsilons: Vec::new(),
         }
+    }
+}
+
+impl<A: Alphabet> From<Deterministic<A>> for NonDeterministic<A> {
+    fn from(det: Deterministic<A>) -> Self {
+        NonDeterministic::from_deterministic(&det)
+    }
+}
+
+impl<'a, A: Alphabet> From<&'a Deterministic<A>> for NonDeterministic<A> {
+    fn from(det: &'a Deterministic<A>) -> Self {
+        NonDeterministic::from_deterministic(det)
     }
 }
