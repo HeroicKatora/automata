@@ -4,6 +4,7 @@ use std::fmt::{Display, Debug};
 use std::io::{self, Write};
 
 use crate::{Alphabet, Ensure};
+use crate::nondeterministic::NonDeterministic;
 use crate::deterministic::{Deterministic, Target};
 use crate::dot::{Family, Edge as DotEdge, GraphWriter, Node as DotNode};
 use crate::nfa::{self, Nfa};
@@ -239,7 +240,7 @@ impl<A: Alphabet> Dfa<A> {
 
     /// Get an equivalent nfa.
     pub fn to_nfa(&self) -> Nfa<A> {
-        let graph = (&self.graph).into();
+        let graph = NonDeterministic::from_deterministic_with(&self.graph, Some);
         let finals = self.finals.iter().cloned()
             .map(Target::index)
             .map(nfa::Node)

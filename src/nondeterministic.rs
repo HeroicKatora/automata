@@ -32,11 +32,6 @@ pub struct Builder<A> {
 
     /// Edges for each node, may contain duplicate entries for first component.
     edges: Vec<Vec<(Character, usize)>>,
-
-    /// Stores epsilon transitions separately.
-    ///
-    /// This makes it easier to find the epsilon reachability graph.
-    epsilons: Vec<Vec<usize>>,
 }
 
 /// Iterator over the outgoing edges of a node.
@@ -67,7 +62,7 @@ struct Edge {
 struct Character(NonZeroUsize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct Label(Option<Character>);
+struct Label(Character);
 
 impl<A: Alphabet> NonDeterministic<A> {
     pub fn builder() -> Builder<A> {
@@ -94,8 +89,21 @@ impl<A: Alphabet> NonDeterministic<A> {
     }
 
     pub fn from_deterministic(det: &Deterministic<A>) -> Self {
+        Self::from_deterministic_with(det, |x| x)
+    }
+
+    pub fn from_deterministic_with<B>(
+        det: &Deterministic<B>,
+        mut symbol: impl FnMut(B) -> A,
+    ) -> Self 
+        where B: Alphabet,
+    {
         // alphabet is also sorted.
-        let characters = det.alphabet().to_vec();
+        let characters = det.alphabet()
+            .iter()
+            .cloned()
+            .map(&mut symbol)
+            .collect::<Vec<_>>();
         let nodes = det.node_count();
         // Assume densely packed.
         let mut edges = Vec::with_capacity(nodes*characters.len());
@@ -123,32 +131,25 @@ impl<A: Alphabet> NonDeterministic<A> {
         }
     }
 
-    fn label(&self, ch: Option<&A>) -> Option<Label> {
-        match ch {
-            Some(ch) => self.characters
-                .binary_search(ch)
-                .map(Label::character)
-                .ok(),
-            None => Some(Label::EPSILON),
-        }
+    fn label(&self, ch: &A) -> Option<Label> {
+        self.characters
+            .binary_search(ch)
+            .map(Label::character)
+            .ok()
     }
 
-    fn unlabel(&self, label: Label) -> Option<&A> {
-        label.index().map(|idx| &self.characters[idx])
+    fn unlabel(&self, label: Label) -> &A {
+        &self.characters[label.index()]
     }
 }
 
 impl<A: Alphabet> Builder<A> {
     /// Insert a new edge, guarded by the specified character.
-    pub fn insert(&mut self, from: usize, character: Option<&A>, to: usize) {
+    pub fn insert(&mut self, from: usize, character: &A, to: usize) {
         self.ensure_nodes(from);
         self.ensure_nodes(to);
-        if let Some(character) = character {
-            let character = self.ensure_char(character);
-            self.edges[from].push((character, to));
-        } else {
-            self.epsilons[from].push(to);
-        }
+        let character = self.ensure_char(character);
+        self.edges[from].push((character, to));
     }
 
     /// Build a finalized graph.
@@ -168,15 +169,11 @@ impl<A: Alphabet> Builder<A> {
         let mut edges = Vec::new();
         let mut ranges = Vec::new();
 
-        let per_node = self.edges.iter().zip(self.epsilons.iter());
-        per_node.for_each(|(node_edges, node_epsilons)| {
+        let per_node = self.edges.iter();
+        per_node.for_each(|node_edges| {
             let start = edges.len();
-            let end = start + node_epsilons.len() + node_edges.len();
+            let end = start + node_edges.len();
 
-            edges.extend(node_epsilons.iter().map(|&target| Edge {
-                label: Label::EPSILON,
-                target,
-            }));
             edges.extend(node_edges.iter().map(|(character, target)| Edge {
                 label: character_label[character],
                 target: *target,
@@ -215,7 +212,6 @@ impl<A: Alphabet> Builder<A> {
 
     fn ensure_nodes(&mut self, node: usize) {
         self.edges.ensure_with(node + 1, Vec::new);
-        self.epsilons.ensure_with(node + 1, Vec::new);
     }
 }
 
@@ -230,23 +226,21 @@ impl Character {
 }
 
 impl Label {
-    const EPSILON: Label = Label(None);
-
     pub fn character(index: usize) -> Self {
-        Label(Some(Character::new(index)))
+        Label(Character::new(index))
     }
 
-    pub fn index(self) -> Option<usize> {
-        self.0.map(Character::index)
+    pub fn index(self) -> usize {
+        self.0.index()
     }
 }
 
 impl<'a, A: Alphabet> Edges<'a, A> {
     /// Only iterate over edges labeled with the character.
-    pub fn restrict_to(&mut self, character: Option<&A>) {
+    pub fn restrict_to(&mut self, character: &A) {
         let label = match self.graph.label(character) {
-            Some(label) => label,
             None => return self.edges = &self.edges[0..0],
+            Some(label) => label,
         };
         let begin = self.edges.iter()
             .position(|edge| edge.label >= label)
@@ -270,7 +264,7 @@ impl<'a, A: Alphabet> Nodes<'a, A> {
 }
 
 impl<'a, A: Alphabet> Iterator for Edges<'a, A> {
-    type Item = (Option<&'a A>, usize);
+    type Item = (&'a A, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
         let (edge, tail) = self.edges.split_first()?;
@@ -312,7 +306,6 @@ impl<A: Alphabet> Default for Builder<A> {
             characters: Vec::new(),
             ordered: Vec::new(),
             edges: Vec::new(),
-            epsilons: Vec::new(),
         }
     }
 }

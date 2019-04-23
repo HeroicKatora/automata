@@ -20,7 +20,7 @@ pub struct RegexNode(pub usize);
 
 /// A non-deterministic automaton with epsilon transitions.
 pub struct Nfa<A: Alphabet> {
-    graph: NonDeterministic<A>,
+    graph: NonDeterministic<Option<A>>,
 
     finals: HashSet<Node>,
 }
@@ -62,7 +62,7 @@ impl<A: Alphabet> Nfa<A> {
         let mut builder = NonDeterministic::builder();
 
         edge_iter.into_iter().for_each(
-            |edge| builder.insert(edge.0, edge.1.as_ref(), edge.2));
+            |edge| builder.insert(edge.0, &edge.1, edge.2));
 
         let finals = finals
             .into_iter()
@@ -75,7 +75,10 @@ impl<A: Alphabet> Nfa<A> {
         }
     }
 
-    pub(crate) fn from_nondeterministic(graph: NonDeterministic<A>, finals: HashSet<Node>) -> Self {
+    pub(crate) fn from_nondeterministic(
+        graph: NonDeterministic<Option<A>>,
+        finals: HashSet<Node>,
+    ) -> Self {
         Nfa {
             graph,
             finals,
@@ -218,7 +221,9 @@ impl<A: Alphabet> Nfa<A> {
         // The epsilon transition closure of reachable nodes.
         let initial_state: BTreeSet<_> = self.epsilon_reach(Node(0));
         let alphabet = self.graph.alphabet()
-            .iter().cloned()
+            .iter()
+            .cloned()
+            .filter_map(|x| x)
             .chain(alphabet_extension)
             .collect::<Vec<_>>();
 
@@ -233,7 +238,7 @@ impl<A: Alphabet> Nfa<A> {
                 let basic = next.iter().cloned()
                     .flat_map(|Node(idx)| {
                         let mut edges = self.graph.edges(idx).unwrap();
-                        edges.restrict_to(Some(&ch));
+                        edges.restrict_to(&Some(ch));
                         edges.targets()
                     })
                     .collect::<HashSet<_>>();
@@ -313,7 +318,7 @@ impl<A: Alphabet> Nfa<A> {
             let next = states.into_iter()
                 .flat_map(|Node(idx)| {
                     let mut edges = self.graph.edges(idx).unwrap();
-                    edges.restrict_to(Some(&ch));
+                    edges.restrict_to(&Some(ch));
                     edges.targets()
                 })
                 .collect::<HashSet<_>>();
@@ -340,7 +345,7 @@ impl<A: Alphabet> Nfa<A> {
 
         while let Some(Node(next)) = todo.pop() {
             let mut edges = self.graph.edges(next).unwrap();
-            edges.restrict_to(None);
+            edges.restrict_to(&None);
             edges.map(|(_, target)| Node(target))
                 .filter(|&target| reached.insert_new(target))
                 .for_each(|target| todo.push(target));
