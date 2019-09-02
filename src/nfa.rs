@@ -25,7 +25,15 @@ pub struct Nfa<A: Alphabet> {
     finals: HashSet<Node>,
 }
 
-pub struct NfaRegex<A: Alphabet>(A);
+pub struct NfaRegex<A: Alphabet> {
+    /// The outgoing edges of the graph.
+    ///
+    /// Note that the alphabet chosen here are the indices of the regexes.
+    graph: NonDeterministic<usize>,
+
+    /// The regex fragments of all edges.
+    regex: Regex<A>,
+}
 
 struct MultiMap<K: Hash + Eq, V> {
     inner: HashMap<K, Vec<V>>,
@@ -382,8 +390,34 @@ impl<A: Alphabet> NfaRegex<A> {
 }
 
 impl<A: Alphabet> From<Nfa<A>> for NfaRegex<A> {
-    fn from(_automaton: Nfa<A>) -> Self {
-        unimplemented!()
+    fn from(automaton: Nfa<A>) -> Self {
+        let mut regex = Regex::new();
+
+        // Ensure all characters in the underlying alphabet are pushed in order. This ensures that
+        // the index of the symbol or epsilon in the Nfa alphabet corresponds to the identifier of
+        // the regex matching it.
+        automaton.graph
+            .alphabet()
+            .iter()
+            .for_each(|&ch| match ch {
+                None => { regex.push(RegOp::Epsilon); },
+                Some(ch) => { regex.push(RegOp::Match(ch)); },
+            });
+
+        let mut graph = NonDeterministic::builder();
+
+        let alphabet = automaton.graph.alphabet();
+        for (from, edges) in automaton.graph.nodes() {
+            for (ch, to) in edges {
+                let idx = alphabet.binary_search(ch).unwrap();
+                graph.insert(from, &idx, to);
+            }
+        }
+
+        NfaRegex {
+            graph: graph.finish(),
+            regex,
+        }
     }
 }
 
